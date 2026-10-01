@@ -1,0 +1,29 @@
+{
+  "name": "leadflow",
+  "version": "1.0.0",
+  "description": "LeadFlow is a multi-tenant platform for German mortgage brokerages.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "seed": "tsx src/scripts/seed.ts"
+  },
+  "author": "Sahil Vishwakarma",
+  "license": "ISC",
+  "keywords": [],
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.10.3",
+    "zod": "^4.6.5"
+  }
+}
