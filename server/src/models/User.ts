@@ -1,3 +1,4 @@
+import { tenantPlugin } from "../lib/tenantPlugin.js";
 import { Schema, model, type Types } from "mongoose";
 
 export const ROLES = [
@@ -54,6 +55,8 @@ const userSchema = new Schema<IUser>(
   },
   { timestamps: true },
 );
+
+userSchema.plugin(tenantPlugin);
 
 userSchema.pre("validate", function () {
   const isPlatformAdmin = this.role === "platform_admin";
