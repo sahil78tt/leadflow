@@ -3,6 +3,7 @@ import mongoose, { type Types } from "mongoose";
 import { connectDb } from "../config/db.js";
 import { Brokerage } from "../models/Brokerage.js";
 import { User, type Role } from "../models/User.js";
+import { skipTenant } from "../lib/tenantPlugin.js";
 
 const PASSWORD = process.env.SEED_PASSWORD ?? "ChangeMe123!";
 
@@ -22,7 +23,7 @@ async function ensureUser(
   role: Role,
   brokerageId: Types.ObjectId | null = null,
 ) {
-  if (await User.exists({ email })) return;
+  if (await skipTenant(User.exists({ email }))) return;
 
   await User.create({
     name,

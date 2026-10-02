@@ -4,6 +4,7 @@ import { z } from "zod";
 import { User } from "../models/User.js";
 import { signToken } from "../lib/jwt.js";
 import { authenticate } from "../middleware/auth.js";
+import { skipTenant } from "../lib/tenantPlugin.js";
 
 const router = Router();
 
@@ -29,7 +30,9 @@ const publicUser = (u: InstanceType<typeof User>) => ({
 router.post("/login", async (req, res) => {
   const { email, password } = loginSchema.parse(req.body);
 
-  const user = await User.findOne({ email }).select("+passwordHash");
+  const user = await skipTenant(
+    User.findOne({ email }).select("+passwordHash"),
+  );
   const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
   if (!user || !ok)
     return res.status(401).json({ error: "Invalid email or password" });
