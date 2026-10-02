@@ -45,6 +45,10 @@ await ensureUser("Max Advisor", "advisor@muster.test", "advisor", a._id);
 
 await ensureUser("Bea Advisor", "advisor@hausbau.test", "advisor", b._id);
 
+console.log(`Webhook "Muster Finanz GmbH":   POST /api/leads/webhook/${a.id}`);
+
+console.log(`Webhook "Hausbau Partner AG":   POST /api/leads/webhook/${b.id}`);
+
 console.log(`Seeded. Password for all users: ${PASSWORD}`);
 
 await mongoose.disconnect();
