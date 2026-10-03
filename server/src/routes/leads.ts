@@ -1,13 +1,78 @@
 import { Router } from "express";
-import { Types } from "mongoose";
+import { Types, type HydratedDocument } from "mongoose";
 import { z } from "zod";
 import { Brokerage } from "../models/Brokerage.js";
-import { Lead } from "../models/Lead.js";
+import { Lead, STAGES, type ILead } from "../models/Lead.js";
+import { authenticate, requireRole } from "../middleware/auth.js";
 import { normalizeEmail, normalizePhone } from "../lib/normalize.js";
 
 const router = Router();
 
 const OBJECT_ID = /^[a-f\d]{24}$/i;
+const MAX_BOARD_LEADS = 500;
+
+const publicLead = (l: HydratedDocument<ILead>) => ({
+  id: l.id as string,
+  name: l.name,
+  email: l.email,
+  phone: l.phone,
+  source: l.source,
+  stage: l.stage,
+  version: l.version,
+  createdAt: l.createdAt,
+});
+
+/* ----------------------------- Board (authenticated) ----------------------------- */
+// Tenant scoping comes from tenantPlugin via the context set in `authenticate`; no manual brokerageId filters here.
+
+router.get(
+  "/",
+  authenticate,
+  requireRole("advisor", "brokerage_admin"),
+  async (_req, res) => {
+    const leads = await Lead.find()
+      .sort({ createdAt: -1 })
+      .limit(MAX_BOARD_LEADS);
+    res.json({ leads: leads.map(publicLead) });
+  },
+);
+
+const moveSchema = z.object({
+  stage: z.enum(STAGES),
+  version: z.number().int().min(0),
+});
+
+router.patch(
+  "/:id/stage",
+  authenticate,
+  requireRole("advisor", "brokerage_admin"),
+  async (req, res) => {
+    const id = String(req.params.id);
+    if (!OBJECT_ID.test(id))
+      return res.status(404).json({ error: "Not found" });
+    const { stage, version } = moveSchema.parse(req.body);
+
+    // Atomic compare-and-set: only succeeds if the caller saw the latest version. A cross-tenant id matches nothing.
+    const updated = await Lead.findOneAndUpdate(
+      { _id: id, version, stage: { $ne: stage } },
+      { $set: { stage }, $inc: { version: 1 } },
+      { new: true },
+    );
+    if (updated) return res.json({ lead: publicLead(updated) });
+
+    // No match: not found (or another tenant's), already in that stage (no-op), or someone else moved it first.
+    const current = await Lead.findById(id);
+    if (!current) return res.status(404).json({ error: "Not found" });
+    if (current.version === version && current.stage === stage)
+      return res.json({ lead: publicLead(current) });
+    res.status(409).json({
+      error: "Lead was changed by someone else",
+      lead: publicLead(current),
+    });
+  },
+);
+
+/* ------------------------------ Webhook (public) ------------------------------ */
 
 const webhookSchema = z
   .object({

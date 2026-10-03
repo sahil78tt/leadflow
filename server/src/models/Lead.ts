@@ -1,7 +1,7 @@
 import { Schema, model, type Types } from "mongoose";
 import { tenantPlugin } from "../lib/tenantPlugin.js";
 
-// Placeholder pipeline; M4 will confirm or rename these.
+// Placeholder pipeline; confirm or rename before the board goes live.
 export const STAGES = [
   "new",
   "contacted",
@@ -19,8 +19,10 @@ export interface ILead {
   phone?: string; // normalized (+<digits>)
   source?: string;
   stage: Stage;
-  version: number; // optimistic concurrency, used from M4
+  version: number; // optimistic concurrency
   idempotencyKey?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const leadSchema = new Schema<ILead>(
@@ -59,6 +61,7 @@ leadSchema.index(
   { brokerageId: 1, idempotencyKey: 1 },
   { unique: true, ...present("idempotencyKey") },
 );
+leadSchema.index({ brokerageId: 1, createdAt: -1 }); // board listing
 
 leadSchema.plugin(tenantPlugin);
 
