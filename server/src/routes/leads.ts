@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Brokerage } from "../models/Brokerage.js";
 import { Lead, STAGES, type ILead } from "../models/Lead.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { emitLeadChanged } from "../lib/socket.js";
 import { normalizeEmail, normalizePhone } from "../lib/normalize.js";
 
 const router = Router();
@@ -58,9 +59,14 @@ router.patch(
       { $set: { stage }, $inc: { version: 1 } },
       { new: true },
     );
-    if (updated) return res.json({ lead: publicLead(updated) });
+    if (updated) {
+      const lead = publicLead(updated);
+      emitLeadChanged(updated.brokerageId.toString(), lead); // everyone on this brokerage's board
+      return res.json({ lead });
+    }
 
     // No match: not found (or another tenant's), already in that stage (no-op), or someone else moved it first.
+    // None of these changed anything, so none of them are broadcast.
     const current = await Lead.findById(id);
     if (!current) return res.status(404).json({ error: "Not found" });
     if (current.version === version && current.stage === stage)
@@ -115,8 +121,9 @@ router.post("/webhook/:brokerageId", async (req, res) => {
   if (!(await Brokerage.exists({ _id: brokerageId })))
     return res.status(404).json({ error: "Not found" });
 
+  let created: HydratedDocument<ILead> | undefined;
   try {
-    await Lead.create({
+    created = await Lead.create({
       ...body,
       brokerageId: new Types.ObjectId(brokerageId),
       idempotencyKey,
@@ -125,6 +132,9 @@ router.post("/webhook/:brokerageId", async (req, res) => {
     // Any unique-index hit (same email, same phone, or same idempotency key) means we already have this lead.
     if (!isDuplicateKeyError(err)) throw err;
   }
+
+  // Only a genuinely new lead is broadcast, and only to its own brokerage.
+  if (created) emitLeadChanged(brokerageId, publicLead(created));
 
   // Identical response for "created" and "duplicate": the caller must not learn whether a lead already exists.
   res.status(202).json({ received: true });
