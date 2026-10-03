@@ -1,5 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { api, ApiError } from "@/lib/api";
+import type { Doc } from "@/lib/documents";
+import { useDocuments } from "@/lib/useDocuments";
+import DocumentList from "@/components/DocumentList";
+import { Button } from "@/components/ui/button";
 
 interface CaseView {
   id: string;
@@ -10,10 +14,16 @@ interface CaseView {
   advisor: { name: string } | null;
 }
 
+const MAX_BYTES = 10 * 1024 * 1024;
+
 export default function Portal() {
   const [data, setData] = useState<CaseView | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
+  const documents = useDocuments("/api/portal/documents");
 
   useEffect(() => {
     let cancelled = false;
@@ -36,6 +46,31 @@ export default function Portal() {
     };
   }, []);
 
+  async function onFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // lets the same file be chosen again
+    if (!file) return;
+    if (file.size > MAX_BYTES) {
+      setUploadError("That file is larger than 10 MB.");
+      return;
+    }
+    setUploading(true);
+    setUploadError("");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const r = await api<{ document: Doc }>("/api/portal/documents", {
+        method: "POST",
+        body,
+      });
+      documents.upsert(r.document); // later status changes arrive over the socket
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   const rows: [string, string][] = data
     ? [
         ["Name", data.name],
@@ -47,7 +82,7 @@ export default function Portal() {
     : [];
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-8">
+    <div className="mx-auto max-w-2xl space-y-8 p-8">
       <div className="space-y-2">
         <p className="type-eyebrow text-mute">Your case</p>
         <h1 className="type-heading-lg">{data?.name ?? "Welcome"}</h1>
@@ -66,6 +101,38 @@ export default function Portal() {
             </div>
           ))}
         </dl>
+      )}
+
+      {data && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="type-heading-md">Documents</h2>
+            <Button
+              size="sm"
+              disabled={uploading}
+              onClick={() => fileInput.current?.click()}
+            >
+              {uploading ? "Uploading…" : "Upload document"}
+            </Button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept="application/pdf,image/jpeg,image/png"
+              className="hidden"
+              onChange={(e) => void onFile(e)}
+            />
+          </div>
+          <p className="text-xs text-mute">
+            PDF, JPEG or PNG, up to 10 MB. Each upload is checked automatically.
+          </p>
+          {uploadError && (
+            <p className="text-sm text-destructive">{uploadError}</p>
+          )}
+          {documents.error && (
+            <p className="text-sm text-destructive">{documents.error}</p>
+          )}
+          <DocumentList docs={documents.docs} onChanged={documents.upsert} />
+        </section>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { useDraggable } from "@dnd-kit/core";
+import { Link } from "react-router-dom"; // <-- EDIT 1: added
 import { cn } from "@/lib/utils";
 import { STAGE_LABELS, type Lead, type Stage } from "@/lib/leads";
 
@@ -50,9 +51,14 @@ export function LeadCard({
         <span>{new Date(lead.createdAt).toLocaleDateString("de-DE")}</span>
       </div>
       {lead.clientId ? (
-        <p className="mt-2 text-xs font-medium text-success-foreground">
-          Client
-        </p>
+        // <-- EDIT 2: replaced the static "Client" <p> with a router Link
+        <Link
+          to={`/clients/${lead.clientId}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="mt-2 inline-block text-xs font-medium text-success-foreground hover:underline"
+        >
+          View client
+        </Link>
       ) : (
         onConvert && (
           <button

@@ -15,7 +15,10 @@ export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...opts,
     headers: {
-      "Content-Type": "application/json",
+      // For FormData the browser must set the multipart boundary itself.
+      ...(opts.body instanceof FormData
+        ? {}
+        : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...opts.headers,
     },
