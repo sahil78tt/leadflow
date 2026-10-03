@@ -6,6 +6,7 @@ import { Lead, STAGES, type ILead } from "../models/Lead.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { emitLeadChanged } from "../lib/socket.js";
 import { normalizeEmail, normalizePhone } from "../lib/normalize.js";
+import { convertLead } from "../lib/convertLead.js"; // <-- EDIT 1: added
 
 const router = Router();
 
@@ -21,6 +22,7 @@ const publicLead = (l: HydratedDocument<ILead>) => ({
   stage: l.stage,
   version: l.version,
   createdAt: l.createdAt,
+  clientId: l.clientId?.toString(), // <-- EDIT 2: added
 });
 
 /* ----------------------------- Board (authenticated) ----------------------------- */
@@ -43,6 +45,7 @@ const moveSchema = z.object({
   version: z.number().int().min(0),
 });
 
+// <-- EDIT 3: replaced the entire PATCH /:id/stage handler and added POST /:id/convert
 router.patch(
   "/:id/stage",
   authenticate,
@@ -54,8 +57,9 @@ router.patch(
     const { stage, version } = moveSchema.parse(req.body);
 
     // Atomic compare-and-set: only succeeds if the caller saw the latest version. A cross-tenant id matches nothing.
+    // Converted leads (they have a clientId) are locked.
     const updated = await Lead.findOneAndUpdate(
-      { _id: id, version, stage: { $ne: stage } },
+      { _id: id, version, stage: { $ne: stage }, clientId: { $exists: false } },
       { $set: { stage }, $inc: { version: 1 } },
       { new: true },
     );
@@ -65,16 +69,82 @@ router.patch(
       return res.json({ lead });
     }
 
-    // No match: not found (or another tenant's), already in that stage (no-op), or someone else moved it first.
+    // No match: not found (or another tenant's), already in that stage (no-op), converted, or moved by someone else.
     // None of these changed anything, so none of them are broadcast.
     const current = await Lead.findById(id);
     if (!current) return res.status(404).json({ error: "Not found" });
     if (current.version === version && current.stage === stage)
       return res.json({ lead: publicLead(current) });
+    if (current.clientId) {
+      return res.status(422).json({
+        error: "Converted leads cannot be moved",
+        lead: publicLead(current),
+      });
+    }
     res.status(409).json({
       error: "Lead was changed by someone else",
       lead: publicLead(current),
     });
+  },
+);
+
+const convertSchema = z.object({
+  version: z.number().int().min(0),
+  email: z
+    .string()
+    .trim()
+    .email()
+    .max(254)
+    .transform((s) => s.toLowerCase()),
+});
+
+router.post(
+  "/:id/convert",
+  authenticate,
+  requireRole("advisor", "brokerage_admin"),
+  async (req, res) => {
+    const id = String(req.params.id);
+    if (!OBJECT_ID.test(id))
+      return res.status(404).json({ error: "Not found" });
+    const { version, email } = convertSchema.parse(req.body);
+
+    const result = await convertLead({
+      leadId: id,
+      version,
+      email,
+      advisorId: req.user!.id,
+    });
+
+    if (result.ok) {
+      const lead = publicLead(result.lead);
+      emitLeadChanged(result.lead.brokerageId.toString(), lead);
+      res.set("Cache-Control", "no-store"); // the response carries a one-time password
+      return res.status(201).json({
+        lead,
+        client: { id: result.client.id as string, name: result.client.name },
+        portal: { email, temporaryPassword: result.temporaryPassword },
+      });
+    }
+
+    switch (result.reason) {
+      case "not_found":
+        return res.status(404).json({ error: "Not found" });
+      case "already_converted":
+        return res.status(409).json({
+          error: "This lead is already a client",
+          lead: publicLead(result.lead),
+        });
+      case "conflict":
+        return res.status(409).json({
+          error: "Lead was changed by someone else",
+          lead: publicLead(result.lead),
+        });
+      case "email_taken":
+        // Deliberately vague: emails are globally unique, so a specific message would reveal other brokerages' users.
+        return res
+          .status(409)
+          .json({ error: "This email cannot be used for a portal login" });
+    }
   },
 );
 
