@@ -18,7 +18,7 @@ export default function AppShell() {
           <div className="type-heading-md px-2">LeadFlow</div>
           <nav className="space-y-1">
             <span className="type-label flex items-center rounded-md bg-sidebar-accent px-2 py-1.5 text-sidebar-accent-foreground">
-              Pipeline
+              {user?.role === "client" ? "My case" : "Pipeline"}
             </span>
           </nav>
         </div>

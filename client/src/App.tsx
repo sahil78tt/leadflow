@@ -3,7 +3,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppShell from "@/components/AppShell";
 import Login from "@/pages/Login";
-import Board from "@/pages/Board";
+import Home from "@/pages/Home";
 
 export default function App() {
   return (
@@ -13,7 +13,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
-              <Route path="/" element={<Board />} />
+              <Route path="/" element={<Home />} />
             </Route>
           </Route>
         </Routes>
