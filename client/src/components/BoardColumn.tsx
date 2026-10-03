@@ -7,10 +7,12 @@ export default function BoardColumn({
   stage,
   leads,
   pending,
+  onConvert,
 }: {
   stage: Stage;
   leads: Lead[];
   pending: Set<string>;
+  onConvert: (lead: Lead) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage });
   return (
@@ -34,6 +36,7 @@ export default function BoardColumn({
             key={lead.id}
             lead={lead}
             disabled={pending.has(lead.id)}
+            onConvert={onConvert}
           />
         ))}
       </div>

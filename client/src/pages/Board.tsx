@@ -14,6 +14,7 @@ import { STAGES, type Lead, type Stage } from "@/lib/leads";
 import BoardColumn from "@/components/BoardColumn";
 import { LeadCard } from "@/components/LeadCard";
 import { Button } from "@/components/ui/button";
+import ConvertDialog from "@/components/ConvertDialog"; // <-- EDIT 1: added
 
 export default function Board() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -24,6 +25,7 @@ export default function Board() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [live, setLive] = useState(false);
+  const [convertId, setConvertId] = useState<string | null>(null); // <-- EDIT 2: added
 
   // distance: a plain click doesn't start a drag
   const sensors = useSensors(
@@ -93,6 +95,7 @@ export default function Board() {
   }, [leads]);
 
   const activeLead = leads.find((l) => l.id === activeId) ?? null;
+  const convertTarget = leads.find((l) => l.id === convertId) ?? null; // <-- EDIT 3: added
 
   const replace = (lead: Lead) =>
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? lead : l)));
@@ -199,6 +202,7 @@ export default function Board() {
                 stage={stage}
                 leads={byStage[stage]}
                 pending={pending}
+                onConvert={(lead) => setConvertId(lead.id)} // <-- EDIT 4: added
               />
             ))}
           </div>
@@ -206,6 +210,16 @@ export default function Board() {
             {activeLead ? <LeadCard lead={activeLead} overlay /> : null}
           </DragOverlay>
         </DndContext>
+      )}
+
+      {/* <-- EDIT 4 (continued): dialog rendered as last child of root div */}
+      {convertTarget && (
+        <ConvertDialog
+          key={convertTarget.id}
+          lead={convertTarget}
+          onClose={() => setConvertId(null)}
+          onUpdated={replace}
+        />
       )}
     </div>
   );

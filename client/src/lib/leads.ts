@@ -26,5 +26,6 @@ export interface Lead {
   source?: string;
   stage: Stage;
   version: number;
+  clientId?: string;
   createdAt: string;
 }

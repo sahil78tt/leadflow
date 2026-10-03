@@ -15,10 +15,12 @@ export function LeadCard({
   lead,
   overlay = false,
   faded = false,
+  onConvert,
 }: {
   lead: Lead;
   overlay?: boolean;
   faded?: boolean;
+  onConvert?: (lead: Lead) => void;
 }) {
   return (
     <div
@@ -47,21 +49,41 @@ export function LeadCard({
         <span>{lead.source ?? "Direct"}</span>
         <span>{new Date(lead.createdAt).toLocaleDateString("de-DE")}</span>
       </div>
+      {lead.clientId ? (
+        <p className="mt-2 text-xs font-medium text-success-foreground">
+          Client
+        </p>
+      ) : (
+        onConvert && (
+          <button
+            type="button"
+            // stop the drag handle on the card from treating this click as the start of a drag
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => onConvert(lead)}
+            className="mt-2 cursor-pointer text-xs font-medium text-foreground hover:underline"
+          >
+            Convert to client
+          </button>
+        )
+      )}
     </div>
   );
 }
 
-// A card locked while its own move request is in flight (disabled), so a fast second drag can't send a stale version.
+// Locked while its own move request is in flight, and permanently once converted.
 export function DraggableLeadCard({
   lead,
   disabled,
+  onConvert,
 }: {
   lead: Lead;
   disabled: boolean;
+  onConvert: (lead: Lead) => void;
 }) {
+  const converted = Boolean(lead.clientId);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: lead.id,
-    disabled,
+    disabled: disabled || converted,
   });
   return (
     <div
@@ -69,10 +91,18 @@ export function DraggableLeadCard({
       {...listeners}
       {...attributes}
       className={
-        disabled ? "cursor-progress" : "cursor-grab active:cursor-grabbing"
+        disabled
+          ? "cursor-progress"
+          : converted
+            ? "cursor-default"
+            : "cursor-grab active:cursor-grabbing"
       }
     >
-      <LeadCard lead={lead} faded={isDragging || disabled} />
+      <LeadCard
+        lead={lead}
+        faded={isDragging || disabled}
+        onConvert={onConvert}
+      />
     </div>
   );
 }
