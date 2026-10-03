@@ -8,6 +8,8 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { api, ApiError } from "@/lib/api";
+import { connectSocket } from "@/lib/socket";
+import { cn } from "@/lib/utils";
 import { STAGES, type Lead, type Stage } from "@/lib/leads";
 import BoardColumn from "@/components/BoardColumn";
 import { LeadCard } from "@/components/LeadCard";
@@ -21,6 +23,7 @@ export default function Board() {
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [live, setLive] = useState(false);
 
   // distance: a plain click doesn't start a drag
   const sensors = useSensors(
@@ -48,6 +51,32 @@ export default function Board() {
       cancelled = true;
     };
   }, [refreshKey]);
+
+  // Live updates. The server decides the room from our token; we only listen.
+  useEffect(() => {
+    const socket = connectSocket();
+    let firstConnect = true;
+
+    socket.on("connect", () => {
+      setLive(true);
+      if (firstConnect) firstConnect = false;
+      else setRefreshKey((k) => k + 1); // reconnected: reload to catch anything missed while offline
+    });
+    socket.on("disconnect", () => setLive(false));
+
+    socket.on("lead:changed", ({ lead: incoming }: { lead: Lead }) => {
+      setLeads((prev) => {
+        const existing = prev.find((l) => l.id === incoming.id);
+        if (!existing) return [incoming, ...prev]; // a new lead
+        if (existing.version >= incoming.version) return prev; // our own echo, or an older event
+        return prev.map((l) => (l.id === incoming.id ? incoming : l));
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (!notice) return;
@@ -117,14 +146,30 @@ export default function Board() {
           <h1 className="type-heading-md">Pipeline</h1>
           <p className="text-xs text-mute">{leads.length} leads</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="bg-card"
-          onClick={() => setRefreshKey((k) => k + 1)}
-        >
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          <span
+            className="flex items-center gap-1.5 text-xs text-mute"
+            title={
+              live ? "Receiving live updates" : "Not connected: use Refresh"
+            }
+          >
+            <span
+              className={cn(
+                "size-1.5 rounded-full",
+                live ? "bg-success" : "bg-faint",
+              )}
+            />
+            {live ? "Live" : "Offline"}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-card"
+            onClick={() => setRefreshKey((k) => k + 1)}
+          >
+            Refresh
+          </Button>
+        </div>
       </header>
 
       {notice && (
