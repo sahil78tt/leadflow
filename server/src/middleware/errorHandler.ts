@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import multer from "multer";
 import { ZodError } from "zod";
 
 export function errorHandler(
@@ -11,6 +12,12 @@ export function errorHandler(
     return res
       .status(400)
       .json({ error: err.issues.map((i) => i.message).join("; ") });
+  }
+  if (err instanceof multer.MulterError) {
+    const tooLarge = err.code === "LIMIT_FILE_SIZE";
+    return res.status(tooLarge ? 413 : 400).json({
+      error: tooLarge ? "File is too large (max 10 MB)" : "Invalid upload",
+    });
   }
   // body-parser errors (malformed JSON, payload too large) carry a 4xx status
   if (

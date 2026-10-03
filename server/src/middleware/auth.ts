@@ -41,3 +41,14 @@ export const requireRole =
       return res.status(403).json({ error: "Forbidden" });
     next();
   };
+
+// <-- NEW: added at the bottom
+// Re-binds the tenant context from req.user. Needed after middleware that continues from a stream callback
+// (multer), where the AsyncLocalStorage context set by `authenticate` may not survive.
+export function bindTenant(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+  tenantStorage.run(
+    { brokerageId: req.user.brokerageId, role: req.user.role },
+    next,
+  );
+}

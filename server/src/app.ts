@@ -6,6 +6,8 @@ import authRoutes from "./routes/auth.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import leadRoutes from "./routes/leads.js";
 import portalRoutes from "./routes/portal.js";
+import clientRoutes from "./routes/clients.js";
+import documentRoutes from "./routes/documents.js";
 
 export const app = express();
 
@@ -17,5 +19,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/leads", leadRoutes);
 app.use("/api/portal", portalRoutes);
+app.use("/api/clients", clientRoutes);
+app.use("/api/documents", documentRoutes);
 
 app.use(errorHandler);
