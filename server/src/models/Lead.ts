@@ -21,6 +21,7 @@ export interface ILead {
   stage: Stage;
   version: number; // optimistic concurrency
   idempotencyKey?: string;
+  clientId?: Types.ObjectId; // set once the lead has been converted
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -40,6 +41,7 @@ const leadSchema = new Schema<ILead>(
     stage: { type: String, enum: STAGES, default: "new" },
     version: { type: Number, default: 0 },
     idempotencyKey: { type: String, select: false },
+    clientId: { type: Schema.Types.ObjectId, ref: "Client" },
   },
   { timestamps: true },
 );
