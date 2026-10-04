@@ -4,9 +4,9 @@ import { z } from "zod";
 import { Brokerage } from "../models/Brokerage.js";
 import { Lead, STAGES, type ILead } from "../models/Lead.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
-import { emitLeadChanged } from "../lib/socket.js";
+import { publishLeadChange } from "../lib/leadEvents.js"; // <-- SWAP 1: was emitLeadChanged from socket.js
 import { normalizeEmail, normalizePhone } from "../lib/normalize.js";
-import { convertLead } from "../lib/convertLead.js"; // <-- EDIT 1: added
+import { convertLead } from "../lib/convertLead.js";
 
 const router = Router();
 
@@ -22,7 +22,7 @@ const publicLead = (l: HydratedDocument<ILead>) => ({
   stage: l.stage,
   version: l.version,
   createdAt: l.createdAt,
-  clientId: l.clientId?.toString(), // <-- EDIT 2: added
+  clientId: l.clientId?.toString(),
 });
 
 /* ----------------------------- Board (authenticated) ----------------------------- */
@@ -45,7 +45,6 @@ const moveSchema = z.object({
   version: z.number().int().min(0),
 });
 
-// <-- EDIT 3: replaced the entire PATCH /:id/stage handler and added POST /:id/convert
 router.patch(
   "/:id/stage",
   authenticate,
@@ -65,7 +64,7 @@ router.patch(
     );
     if (updated) {
       const lead = publicLead(updated);
-      emitLeadChanged(updated.brokerageId.toString(), lead); // everyone on this brokerage's board
+      await publishLeadChange(updated.brokerageId.toString(), lead); // <-- SWAP 2: was emitLeadChanged
       return res.json({ lead });
     }
 
@@ -117,7 +116,7 @@ router.post(
 
     if (result.ok) {
       const lead = publicLead(result.lead);
-      emitLeadChanged(result.lead.brokerageId.toString(), lead);
+      await publishLeadChange(result.lead.brokerageId.toString(), lead); // <-- SWAP 3: was emitLeadChanged
       res.set("Cache-Control", "no-store"); // the response carries a one-time password
       return res.status(201).json({
         lead,
@@ -204,7 +203,7 @@ router.post("/webhook/:brokerageId", async (req, res) => {
   }
 
   // Only a genuinely new lead is broadcast, and only to its own brokerage.
-  if (created) emitLeadChanged(brokerageId, publicLead(created));
+  if (created) await publishLeadChange(brokerageId, publicLead(created)); // <-- SWAP 4: was emitLeadChanged
 
   // Identical response for "created" and "duplicate": the caller must not learn whether a lead already exists.
   res.status(202).json({ received: true });
