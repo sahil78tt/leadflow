@@ -4,6 +4,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import AppShell from "@/components/AppShell";
 import Login from "@/pages/Login";
 import Home from "@/pages/Home";
+import Dashboard from "@/pages/Dashboard";
 import ClientDetail from "@/pages/ClientDetail";
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route path="/" element={<Home />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/clients/:clientId" element={<ClientDetail />} />
             </Route>
           </Route>

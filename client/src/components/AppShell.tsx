@@ -1,5 +1,6 @@
-import { Outlet } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import { useAuth, type Role } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -9,6 +10,14 @@ const ROLE_LABELS: Record<Role, string> = {
   client: "Client",
 };
 
+const navClass = ({ isActive }: { isActive: boolean }) =>
+  cn(
+    "type-label flex items-center rounded-md px-2 py-1.5",
+    isActive
+      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+      : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+  );
+
 export default function AppShell() {
   const { user, logout } = useAuth();
   return (
@@ -17,9 +26,20 @@ export default function AppShell() {
         <div className="space-y-6">
           <div className="type-heading-md px-2">LeadFlow</div>
           <nav className="space-y-1">
-            <span className="type-label flex items-center rounded-md bg-sidebar-accent px-2 py-1.5 text-sidebar-accent-foreground">
-              {user?.role === "client" ? "My case" : "Pipeline"}
-            </span>
+            {user?.role === "client" ? (
+              <NavLink to="/" end className={navClass}>
+                My case
+              </NavLink>
+            ) : (
+              <>
+                <NavLink to="/" end className={navClass}>
+                  Pipeline
+                </NavLink>
+                <NavLink to="/dashboard" className={navClass}>
+                  Dashboard
+                </NavLink>
+              </>
+            )}
           </nav>
         </div>
         <div className="space-y-3 border-t border-sidebar-border pt-4">
