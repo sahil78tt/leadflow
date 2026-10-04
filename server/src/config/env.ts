@@ -16,6 +16,8 @@ const schema = z.object({
   CLOUDINARY_CLOUD_NAME: optional,
   CLOUDINARY_API_KEY: optional,
   CLOUDINARY_API_SECRET: optional,
+  // rediss://default:<password>@<host>:6379. Without it the dashboard runs uncached.
+  UPSTASH_REDIS_URL: optional,
 });
 
 export const env = schema.parse(process.env);
