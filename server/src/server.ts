@@ -5,6 +5,7 @@ import { connectDb } from "./config/db.js";
 import { initRedisCache } from "./lib/cache.js";
 import { isCloudinaryConfigured } from "./lib/cloudinary.js";
 import { recoverStuckChecks } from "./lib/documentChecks.js";
+import { mailer } from "./lib/mailer.js";
 import { initSocket } from "./lib/socket.js";
 
 await connectDb();
@@ -17,6 +18,8 @@ if (!initRedisCache())
   console.warn(
     "UPSTASH_REDIS_URL is not set: the dashboard will run without a cache",
   );
+if (!mailer.configured())
+  console.warn("RESEND_API_KEY is not set: welcome emails are disabled");
 
 const recovered = await recoverStuckChecks();
 if (recovered > 0)

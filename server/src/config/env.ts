@@ -18,6 +18,8 @@ const schema = z.object({
   CLOUDINARY_API_SECRET: optional,
   // rediss://default:<password>@<host>:6379. Without it the dashboard runs uncached.
   UPSTASH_REDIS_URL: optional,
+  RESEND_API_KEY: optional,
+  EMAIL_FROM: optional,
 });
 
 export const env = schema.parse(process.env);
