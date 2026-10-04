@@ -7,6 +7,7 @@ import { authenticate, requireRole } from "../middleware/auth.js";
 import { publishLeadChange } from "../lib/leadEvents.js"; // <-- SWAP 1: was emitLeadChanged from socket.js
 import { normalizeEmail, normalizePhone } from "../lib/normalize.js";
 import { convertLead } from "../lib/convertLead.js";
+import { sendWelcomeEmail } from "../lib/welcomeEmail.js";
 
 const router = Router();
 
@@ -25,6 +26,12 @@ const publicLead = (l: HydratedDocument<ILead>) => ({
   clientId: l.clientId?.toString(),
 });
 
+const welcomeTarget = (l: HydratedDocument<ILead>) => ({
+  id: l.id as string,
+  brokerageId: l.brokerageId.toString(),
+  name: l.name,
+  email: l.email,
+});
 /* ----------------------------- Board (authenticated) ----------------------------- */
 // Tenant scoping comes from tenantPlugin via the context set in `authenticate`; no manual brokerageId filters here.
 
@@ -64,7 +71,9 @@ router.patch(
     );
     if (updated) {
       const lead = publicLead(updated);
-      await publishLeadChange(updated.brokerageId.toString(), lead); // <-- SWAP 2: was emitLeadChanged
+      await publishLeadChange(updated.brokerageId.toString(), lead); // everyone on this brokerage's board
+      // Not awaited: a slow or failing email never delays or fails the move.
+      if (stage === "new") void sendWelcomeEmail(welcomeTarget(updated));
       return res.json({ lead });
     }
 
@@ -203,7 +212,10 @@ router.post("/webhook/:brokerageId", async (req, res) => {
   }
 
   // Only a genuinely new lead is broadcast, and only to its own brokerage.
-  if (created) await publishLeadChange(brokerageId, publicLead(created)); // <-- SWAP 4: was emitLeadChanged
+  if (created) {
+    await publishLeadChange(brokerageId, publicLead(created));
+    void sendWelcomeEmail(welcomeTarget(created)); // a new lead starts in New; not awaited
+  }
 
   // Identical response for "created" and "duplicate": the caller must not learn whether a lead already exists.
   res.status(202).json({ received: true });
