@@ -65,6 +65,8 @@ leadSchema.index(
 );
 leadSchema.index({ brokerageId: 1, createdAt: -1 }); // board listing
 
+leadSchema.index({ brokerageId: 1, stage: 1 }); // dashboard counts
+
 leadSchema.plugin(tenantPlugin);
 
 export const Lead = model<ILead>("Lead", leadSchema);

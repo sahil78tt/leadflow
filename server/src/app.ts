@@ -8,6 +8,7 @@ import leadRoutes from "./routes/leads.js";
 import portalRoutes from "./routes/portal.js";
 import clientRoutes from "./routes/clients.js";
 import documentRoutes from "./routes/documents.js";
+import dashboardRoutes from "./routes/dashboard.js";
 
 export const app = express();
 
@@ -21,5 +22,6 @@ app.use("/api/leads", leadRoutes);
 app.use("/api/portal", portalRoutes);
 app.use("/api/clients", clientRoutes);
 app.use("/api/documents", documentRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.use(errorHandler);
