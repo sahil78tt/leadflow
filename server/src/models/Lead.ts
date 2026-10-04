@@ -12,6 +12,13 @@ export const STAGES = [
 ] as const;
 export type Stage = (typeof STAGES)[number];
 
+export interface IWelcomeEmail {
+  status: "sending" | "sent" | "failed";
+  at: Date;
+  resendId?: string;
+  error?: string;
+}
+
 export interface ILead {
   brokerageId: Types.ObjectId;
   name: string;
@@ -22,9 +29,20 @@ export interface ILead {
   version: number; // optimistic concurrency
   idempotencyKey?: string;
   clientId?: Types.ObjectId; // set once the lead has been converted
+  welcomeEmail?: IWelcomeEmail; // never returned by the API; does not touch `version`
   createdAt?: Date;
   updatedAt?: Date;
 }
+
+const welcomeEmailSchema = new Schema<IWelcomeEmail>(
+  {
+    status: { type: String, enum: ["sending", "sent", "failed"] },
+    at: { type: Date },
+    resendId: { type: String },
+    error: { type: String },
+  },
+  { _id: false },
+);
 
 const leadSchema = new Schema<ILead>(
   {
@@ -42,6 +60,7 @@ const leadSchema = new Schema<ILead>(
     version: { type: Number, default: 0 },
     idempotencyKey: { type: String, select: false },
     clientId: { type: Schema.Types.ObjectId, ref: "Client" },
+    welcomeEmail: { type: welcomeEmailSchema, select: false },
   },
   { timestamps: true },
 );
@@ -64,8 +83,11 @@ leadSchema.index(
   { unique: true, ...present("idempotencyKey") },
 );
 leadSchema.index({ brokerageId: 1, createdAt: -1 }); // board listing
-
 leadSchema.index({ brokerageId: 1, stage: 1 }); // dashboard counts
+leadSchema.index(
+  { brokerageId: 1, "welcomeEmail.at": 1 },
+  { partialFilterExpression: { "welcomeEmail.at": { $exists: true } } },
+); // the daily email cap
 
 leadSchema.plugin(tenantPlugin);
 
