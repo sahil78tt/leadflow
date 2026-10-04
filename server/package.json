@@ -10,7 +10,7 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
+    "test": "tsx --test --test-concurrency=1 --import ./src/test/setup.js \"src/**/*.test.ts\"",
     "seed": "tsx src/scripts/seed.ts"
   },
   "author": "Sahil Vishwakarma",
