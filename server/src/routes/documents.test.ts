@@ -123,7 +123,9 @@ describe("documents", () => {
     pick: (payload: P) => T,
   ) => {
     const seen: T[] = [];
-    socket.on(event, (payload: P) => seen.push(pick(payload)));
+    socket.on(event, (payload: P) => {
+      seen.push(pick(payload));
+    });
     return seen;
   };
   const settle = () => new Promise((resolve) => setTimeout(resolve, 250));
