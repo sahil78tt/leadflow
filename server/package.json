@@ -6,12 +6,16 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "tsx --test --test-concurrency=1 --import ./src/test/setup.js \"src/**/*.test.ts\"",
-    "seed": "tsx src/scripts/seed.ts"
+    "seed": "tsx src/scripts/seed.ts",
+    "smoke": "tsx src/scripts/smoke.ts"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "author": "Sahil Vishwakarma",
   "license": "ISC",
