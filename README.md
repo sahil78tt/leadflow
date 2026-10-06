@@ -84,9 +84,10 @@ The application supports multiple brokerages from the same deployment while keep
   - An email template can be linked to a pipeline stage.
   - When a lead enters that stage, the configured email is sent through Resend.
   - Email delivery status is stored to prevent duplicate sends.
+  - A failed send is recorded and does not roll back the stage change.
 
 - **Task Triggers**
-  - Brokerage admins can configure a task for a pipeline stage.
+  - Brokerage admins can configure a task for a pipeline stage (one trigger per stage).
   - Tasks contain an assigned advisor and due time.
   - Duplicate task creation is prevented.
 
@@ -203,6 +204,7 @@ LeadFlow/
 │       └── app.ts
 │
 ├── PROMPTS.md
+├── SUMMARY.md
 └── README.md
 ```
 
@@ -210,25 +212,41 @@ LeadFlow/
 
 ## User Roles
 
-| Role            | Main Access                                                    |
-| --------------- | -------------------------------------------------------------- |
-| Platform Admin  | Platform-level administration                                  |
-| Brokerage Admin | Brokerage settings, email templates/triggers and task triggers |
-| Advisor         | Leads, pipeline and assigned tasks                             |
-| Client          | Own case and document uploads                                  |
+| Role            | What they can do                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------ |
+| Platform Admin  | Platform-level access across brokerages (not tenant-scoped); admin UI is minimal           |
+| Brokerage Admin | Own brokerage only: email templates and triggers, task triggers, plus lead/task visibility |
+| Advisor         | Own brokerage only: leads, pipeline, lead → client conversion and assigned tasks           |
+| Client          | Own case and document uploads only                                                         |
+
+---
+
+## Test Logins
+
+All accounts are seeded on the live deployment.
+
+| Role                     | Email                | Password       |
+| ------------------------ | -------------------- | -------------- |
+| Platform Admin           | admin@leadflow.test  | ChangeMe123!   |
+| Brokerage Admin (Muster) | admin@muster.test    | ChangeMe123!   |
+| Advisor (Muster)         | advisor@muster.test  | ChangeMe123!   |
+| Advisor (Hausbau)        | advisor@hausbau.test | ChangeMe123!   |
+| Client (Muster)          | client@muster.test   | ClientDemo123! |
+
+Hausbau is a second brokerage for checking tenant isolation. The backend runs on Render's free tier, so the first request after idle can take about 30 seconds.
 
 ---
 
 ## Deployment
 
-| Part      | Platform      | URL                                   |
-| --------- | ------------- | ------------------------------------- |
-| Frontend  | Vercel        | https://leadflow-one-opal.vercel.app/ |
-| Backend   | Render        | https://leadflow-rbdt.onrender.com    |
-| Database  | MongoDB Atlas | Private                               |
-| Redis     | Upstash       | Private                               |
-| Documents | Cloudinary    | Private                               |
-| Email     | Resend        | External service                      |
+| Part      | Platform      | URL                                       |
+| --------- | ------------- | ----------------------------------------- |
+| Frontend  | Vercel        | https://leadflow-one-opal.vercel.app/     |
+| Backend   | Render        | https://leadflow-rbdt.onrender.com/health |
+| Database  | MongoDB Atlas | Private                                   |
+| Redis     | Upstash       | Private                                   |
+| Documents | Cloudinary    | Private                                   |
+| Email     | Resend        | External service                          |
 
 Backend health check:
 
@@ -244,7 +262,7 @@ https://leadflow-rbdt.onrender.com/health
 
 ```bash
 git clone https://github.com/sahil78tt/leadflow
-cd LeadFlow
+cd leadflow
 ```
 
 ### 2. Install backend dependencies
@@ -290,28 +308,40 @@ npm run dev
 ### Server
 
 ```env
-MONGODB_URI=
-MONGODB_URI_TEST=
-JWT_SECRET=
-CLIENT_URL=
-PORT=
+//Database
+MONGODB_URI=your_mongo_url
+MONGODB_URI_TEST=your_mongo_test_url
 
-CLOUDINARY_CLOUD_NAME=
-CLOUDINARY_API_KEY=
-CLOUDINARY_API_SECRET=
+//JWT
+JWT_SECRET=your_jwt_secret
 
-UPSTASH_REDIS_URL=
+//Ports
+CLIENT_URL=http://localhost:5173
+PORT=4000
 
-RESEND_API_KEY=
+//Cloudinary Configuration
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+
+//Redis Configuration
+UPSTASH_REDIS_URL=your_upstash_redis_url
+
+//Resend Configuration
+RESEND_API_KEY=your_resend_api_key
 EMAIL_FROM=
 
-SEED_PASSWORD=
+//Webhook Secret
+WEBHOOK_SECRET=your_webhook_secret
+
+//Seed
+SEED_PASSWORD=your_seed_password
 ```
 
 ### Client
 
 ```env
-VITE_API_URL=
+VITE_API_URL=http://localhost:4000
 ```
 
 Never commit real secrets to the repository.
@@ -320,9 +350,16 @@ Never commit real secrets to the repository.
 
 ## Testing
 
-The backend has targeted tests for the main workflows and security-sensitive areas.
+The backend has targeted tests for the main workflows and security-sensitive areas (tenant isolation, duplicate/idempotent ingestion, concurrent stage moves, documents, automations).
 
-The latest tests for the email and task automation work:
+Run the full backend suite:
+
+```bash
+cd server
+npm test
+```
+
+Tests for the email and task automation work:
 
 ```text
 Email Templates    7
@@ -376,18 +413,29 @@ Both builds pass.
 
 This was built as a 5–7 day assignment, so some production-level features are intentionally simplified.
 
+- Handling 500 leads in one minute has not been load-tested.
+- There is no per-brokerage rate limiting, so one brokerage flooding the system could affect others.
+- Background processing runs in the application process rather than a durable job queue; document checks recover on restart but have no retries or dead-letter handling.
+- Failed emails are recorded but not retried.
+- Production Resend email delivery requires a verified sender domain, which is not set up.
+- The lead webhook has no authentication beyond the brokerage ID (no per-brokerage secret or HMAC signing).
+- Live events missed while a client is offline are not replayed; the board refetches on reconnect.
+- Only one task trigger is supported per brokerage and stage.
 - Document checking is simulated instead of using a real document verification service.
-- Background processing currently runs in the application process rather than a durable job queue.
-- Socket.IO currently uses the in-memory adapter, so horizontal scaling would require a Redis adapter.
-- The lead webhook does not currently use per-brokerage HMAC signing.
+- Socket.IO uses the in-memory adapter, so horizontal scaling would require a Redis adapter.
 - JWTs are stateless, so user deactivation does not immediately invalidate an already-issued token.
 - Client password reset/change flow is not fully implemented.
 - Platform admin UI is limited.
 - There is no dedicated reminder/notification system for overdue tasks.
-- Production Resend email delivery requires a verified sender domain.
 - Frontend E2E tests are not currently implemented.
 
 These are the main areas I would address next for a production version.
+
+---
+
+## AI Usage
+
+Claude was used during development. All prompts are logged in order and unedited in [`PROMPTS.md`](./PROMPTS.md). A two-paragraph project summary is in [`SUMMARY.md`](./SUMMARY.md).
 
 ---
 
