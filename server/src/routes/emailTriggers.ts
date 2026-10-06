@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
 import { EmailTemplate } from "../models/EmailTemplate.js";
 import { EmailTrigger } from "../models/EmailTrigger.js";
@@ -20,11 +20,16 @@ const updateSchema = z.object({
   enabled: z.boolean().optional(),
 });
 
-function brokerageIdForAdmin(req: Parameters<typeof router.get>[1] extends (
-  ...args: infer A
-) => any
-  ? A[0]
-  : never) {
+function isDuplicateKeyError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === 11000
+  );
+}
+
+function brokerageIdForAdmin(req: Request) {
   const brokerageId = req.user?.brokerageId;
 
   if (!brokerageId) {
@@ -34,10 +39,7 @@ function brokerageIdForAdmin(req: Parameters<typeof router.get>[1] extends (
   return brokerageId;
 }
 
-async function verifyTemplate(
-  templateId: string,
-  brokerageId: string,
-) {
+async function verifyTemplate(templateId: string, brokerageId: string) {
   if (!isObjectId(templateId)) return null;
 
   return EmailTemplate.findOne({
@@ -76,10 +78,7 @@ router.post(
 
     const brokerageId = brokerageIdForAdmin(req);
 
-    const template = await verifyTemplate(
-      parsed.data.templateId,
-      brokerageId,
-    );
+    const template = await verifyTemplate(parsed.data.templateId, brokerageId);
 
     if (!template) {
       return res.status(404).json({
@@ -98,8 +97,8 @@ router.post(
       await trigger.populate("templateId", "name subject enabled");
 
       return res.status(201).json({ trigger });
-    } catch (error: any) {
-      if (error?.code === 11000) {
+    } catch (error: unknown) {
+      if (isDuplicateKeyError(error)) {
         return res.status(409).json({
           error: `An email trigger already exists for the ${parsed.data.stage} stage`,
         });
@@ -165,8 +164,8 @@ router.patch(
       }
 
       return res.json({ trigger });
-    } catch (error: any) {
-      if (error?.code === 11000) {
+    } catch (error: unknown) {
+      if (isDuplicateKeyError(error)) {
         return res.status(409).json({
           error: "Another email trigger already uses this stage",
         });

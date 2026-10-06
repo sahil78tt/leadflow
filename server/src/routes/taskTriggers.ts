@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
 import { TaskTrigger } from "../models/TaskTrigger.js";
 import { User } from "../models/User.js";
@@ -19,13 +19,16 @@ const triggerSchema = z.object({
 
 const updateSchema = triggerSchema.partial();
 
-function brokerageIdForAdmin(
-  req: Parameters<typeof router.get>[1] extends (
-    ...args: infer A
-  ) => any
-    ? A[0]
-    : never,
-) {
+function isDuplicateKeyError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === 11000
+  );
+}
+
+function brokerageIdForAdmin(req: Request) {
   const brokerageId = req.user?.brokerageId;
 
   if (!brokerageId) {
@@ -35,10 +38,7 @@ function brokerageIdForAdmin(
   return brokerageId;
 }
 
-async function verifyAdvisor(
-  advisorId: string,
-  brokerageId: string,
-) {
+async function verifyAdvisor(advisorId: string, brokerageId: string) {
   if (!isObjectId(advisorId)) return null;
 
   return User.findOne({
@@ -78,10 +78,7 @@ router.post(
 
     const brokerageId = brokerageIdForAdmin(req);
 
-    const advisor = await verifyAdvisor(
-      parsed.data.assignedTo,
-      brokerageId,
-    );
+    const advisor = await verifyAdvisor(parsed.data.assignedTo, brokerageId);
 
     if (!advisor) {
       return res.status(404).json({
@@ -103,8 +100,8 @@ router.post(
       await trigger.populate("assignedTo", "name email role");
 
       return res.status(201).json({ trigger });
-    } catch (error: any) {
-      if (error?.code === 11000) {
+    } catch (error: unknown) {
+      if (isDuplicateKeyError(error)) {
         return res.status(409).json({
           error: `A task trigger already exists for the ${parsed.data.stage} stage`,
         });
@@ -138,10 +135,7 @@ router.patch(
     const brokerageId = brokerageIdForAdmin(req);
 
     if (parsed.data.assignedTo) {
-      const advisor = await verifyAdvisor(
-        parsed.data.assignedTo,
-        brokerageId,
-      );
+      const advisor = await verifyAdvisor(parsed.data.assignedTo, brokerageId);
 
       if (!advisor) {
         return res.status(404).json({
@@ -170,8 +164,8 @@ router.patch(
       }
 
       return res.json({ trigger });
-    } catch (error: any) {
-      if (error?.code === 11000) {
+    } catch (error: unknown) {
+      if (isDuplicateKeyError(error)) {
         return res.status(409).json({
           error: "Another task trigger already uses this stage",
         });

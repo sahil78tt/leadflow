@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
 import { EmailTemplate } from "../models/EmailTemplate.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
@@ -16,16 +16,15 @@ const templateSchema = z.object({
 
 const updateSchema = templateSchema.partial();
 
-const PLACEHOLDERS = [
-  "clientName",
-  "advisorName",
-  "leadName",
-  "brokerageName",
-] as const;
+type TemplatePlaceholder =
+  | "clientName"
+  | "advisorName"
+  | "leadName"
+  | "brokerageName";
 
 function renderTemplate(
   value: string,
-  data: Record<(typeof PLACEHOLDERS)[number], string>,
+  data: Record<TemplatePlaceholder, string>,
 ) {
   return value.replace(
     /\{\{\s*(clientName|advisorName|leadName|brokerageName)\s*\}\}/g,
@@ -42,11 +41,16 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#39;");
 }
 
-function brokerageIdForAdmin(req: Parameters<typeof router.get>[1] extends (
-  ...args: infer A
-) => any
-  ? A[0]
-  : never) {
+function isDuplicateKeyError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === 11000
+  );
+}
+
+function brokerageIdForAdmin(req: Request) {
   const brokerageId = req.user?.brokerageId;
 
   if (!brokerageId) {
@@ -61,9 +65,7 @@ router.get(
   authenticate,
   requireRole("brokerage_admin"),
   async (_req, res) => {
-    const templates = await EmailTemplate.find()
-      .sort({ createdAt: -1 })
-      .lean();
+    const templates = await EmailTemplate.find().sort({ createdAt: -1 }).lean();
 
     res.json({ templates });
   },
@@ -91,8 +93,8 @@ router.post(
       });
 
       return res.status(201).json({ template });
-    } catch (error: any) {
-      if (error?.code === 11000)
+    } catch (error: unknown) {
+      if (isDuplicateKeyError(error))
         return res.status(409).json({
           error: "A template with this name already exists",
         });
@@ -129,8 +131,8 @@ router.patch(
       if (!template) return res.status(404).json({ error: "Not found" });
 
       return res.json({ template });
-    } catch (error: any) {
-      if (error?.code === 11000)
+    } catch (error: unknown) {
+      if (isDuplicateKeyError(error))
         return res.status(409).json({
           error: "A template with this name already exists",
         });
@@ -171,16 +173,12 @@ router.post(
 
     if (!template) return res.status(404).json({ error: "Not found" });
 
-    const sample = {
-      clientName: escapeHtml(
-        String(req.body?.clientName ?? "Alex Client"),
-      ),
+    const sample: Record<TemplatePlaceholder, string> = {
+      clientName: escapeHtml(String(req.body?.clientName ?? "Alex Client")),
       advisorName: escapeHtml(
         String(req.body?.advisorName ?? "Jordan Advisor"),
       ),
-      leadName: escapeHtml(
-        String(req.body?.leadName ?? "Alex Client"),
-      ),
+      leadName: escapeHtml(String(req.body?.leadName ?? "Alex Client")),
       brokerageName: escapeHtml(
         String(req.body?.brokerageName ?? "Your Brokerage"),
       ),

@@ -30,12 +30,6 @@ const publicLead = (l: HydratedDocument<ILead>) => ({
   clientId: l.clientId?.toString(),
 });
 
-const welcomeTarget = (l: HydratedDocument<ILead>) => ({
-  id: l.id as string,
-  brokerageId: l.brokerageId.toString(),
-  name: l.name,
-  email: l.email,
-});
 /* ----------------------------- Board (authenticated) ----------------------------- */
 // Tenant scoping comes from tenantPlugin via the context set in `authenticate`; no manual brokerageId filters here.
 

@@ -170,9 +170,7 @@ export default function TaskTriggers() {
 
       resetForm();
     } catch (e: unknown) {
-      setError(
-        e instanceof Error ? e.message : "Failed to save task trigger",
-      );
+      setError(e instanceof Error ? e.message : "Failed to save task trigger");
     } finally {
       setSaving(false);
     }
@@ -182,6 +180,7 @@ export default function TaskTriggers() {
     const advisor = advisorInfo(trigger);
 
     setEditingId(trigger._id);
+
     setForm({
       stage: trigger.stage,
       title: trigger.title,
@@ -268,28 +267,40 @@ export default function TaskTriggers() {
       );
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 p-8">
-      <div className="space-y-1">
+    <div className="mx-auto max-w-6xl space-y-5 p-6">
+      <div className="space-y-0.5">
         <p className="type-eyebrow text-mute">Brokerage settings</p>
+
         <h1 className="type-heading-lg">Task Triggers</h1>
-        <p className="text-sm text-mute">
+
+        <p className="max-w-3xl text-sm text-mute">
           Create automatic advisor tasks when a lead enters a pipeline stage.
           Each stage can have one task trigger.
         </p>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {message && <p className="text-sm text-body">{message}</p>}
+      {error && (
+        <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.4fr]">
-        <section className="rounded-xl border border-border bg-card p-6">
-          <div className="mb-5 flex items-center justify-between gap-3">
+      {message && (
+        <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-body">
+          {message}
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-[0.9fr_1.5fr]">
+        <section className="rounded-xl border border-border bg-card p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="type-heading-md">
                 {editingId ? "Edit trigger" : "New trigger"}
               </h2>
-              <p className="mt-1 text-xs text-mute">
-                Tasks are automatically assigned to the selected advisor.
+
+              <p className="mt-0.5 text-xs text-mute">
+                Automatically assign the task to an advisor.
               </p>
             </div>
 
@@ -300,11 +311,12 @@ export default function TaskTriggers() {
             )}
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div>
               <label className="type-label">Pipeline stage</label>
+
               <select
-                className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                 value={form.stage}
                 onChange={(e) =>
                   setForm((current) => ({
@@ -323,8 +335,9 @@ export default function TaskTriggers() {
 
             <div>
               <label className="type-label">Task title</label>
+
               <input
-                className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                 value={form.title}
                 maxLength={200}
                 placeholder="e.g. Call new lead"
@@ -339,8 +352,9 @@ export default function TaskTriggers() {
 
             <div>
               <label className="type-label">Description</label>
+
               <textarea
-                className="mt-1 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                className="mt-1 min-h-16 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                 value={form.description}
                 maxLength={2000}
                 placeholder="Optional instructions for the advisor"
@@ -355,8 +369,9 @@ export default function TaskTriggers() {
 
             <div>
               <label className="type-label">Assigned advisor</label>
+
               <select
-                className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                 value={form.assignedTo}
                 onChange={(e) =>
                   setForm((current) => ({
@@ -375,7 +390,7 @@ export default function TaskTriggers() {
               </select>
 
               {advisors.length === 0 && (
-                <p className="mt-2 text-xs text-mute">
+                <p className="mt-1 text-xs text-mute">
                   No advisors are available in this brokerage.
                 </p>
               )}
@@ -390,7 +405,7 @@ export default function TaskTriggers() {
                   min={1}
                   max={525600}
                   step={1}
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                   value={form.dueInMinutes}
                   onChange={(e) =>
                     setForm((current) => ({
@@ -400,13 +415,13 @@ export default function TaskTriggers() {
                   }
                 />
 
-                <div className="flex h-10 items-center rounded-md border border-input bg-muted px-3 text-sm text-mute">
+                <div className="flex h-9 items-center rounded-md border border-input bg-muted px-3 text-sm text-mute">
                   minutes
                 </div>
               </div>
 
-              <p className="mt-1 text-xs text-mute">
-                Example: 60 = 1 hour, 1440 = 1 day.
+              <p className="mt-1 text-[11px] text-mute">
+                60 = 1 hour · 1440 = 1 day
               </p>
             </div>
 
@@ -424,8 +439,9 @@ export default function TaskTriggers() {
               Enabled
             </label>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-1">
               <Button
+                size="sm"
                 onClick={saveTrigger}
                 disabled={saving || advisors.length === 0}
               >
@@ -437,7 +453,7 @@ export default function TaskTriggers() {
               </Button>
 
               {editingId && (
-                <Button variant="outline" onClick={resetForm}>
+                <Button variant="outline" size="sm" onClick={resetForm}>
                   Cancel
                 </Button>
               )}
@@ -445,11 +461,12 @@ export default function TaskTriggers() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-border bg-card p-6">
+        <section className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="type-heading-md">Stage automations</h2>
-              <p className="mt-1 text-xs text-mute">
+
+              <p className="mt-0.5 text-xs text-mute">
                 A task is created automatically when a lead enters the stage.
               </p>
             </div>
@@ -460,65 +477,67 @@ export default function TaskTriggers() {
           </div>
 
           {loading ? (
-            <p className="mt-6 text-sm text-mute">Loading...</p>
+            <p className="mt-5 text-sm text-mute">Loading...</p>
           ) : triggers.length === 0 ? (
-            <p className="mt-6 text-sm text-mute">
-              No task triggers yet. Create one on the left.
+            <p className="mt-5 text-sm text-mute">
+              No task triggers yet. Create your first one on the left.
             </p>
           ) : (
-            <div className="mt-5 space-y-3">
+            <div className="mt-4 space-y-2">
               {triggers.map((trigger) => {
                 const advisor = advisorInfo(trigger);
 
                 return (
                   <div
                     key={trigger._id}
-                    className="rounded-lg border border-border p-4"
+                    className="rounded-lg border border-border p-3"
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
                             {trigger.stage}
                           </span>
 
                           <span
                             className={
                               trigger.enabled
-                                ? "rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"
-                                : "rounded-full bg-muted px-2 py-0.5 text-xs text-mute"
+                                ? "rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary"
+                                : "rounded-full bg-muted px-2 py-0.5 text-[11px] text-mute"
                             }
                           >
                             {trigger.enabled ? "Enabled" : "Disabled"}
                           </span>
                         </div>
 
-                        <h3 className="mt-2 font-medium">{trigger.title}</h3>
+                        <h3 className="mt-1.5 truncate text-sm font-medium">
+                          {trigger.title}
+                        </h3>
 
                         {trigger.description && (
-                          <p className="mt-1 text-sm text-mute">
+                          <p className="mt-0.5 truncate text-xs text-mute">
                             {trigger.description}
                           </p>
                         )}
 
-                        <div className="mt-2 space-y-1 text-xs text-mute">
-                          <p>
-                            Assigned to:{" "}
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-mute">
+                          <span>
+                            Advisor:{" "}
                             <span className="text-body">{advisor.name}</span>
-                          </p>
+                          </span>
 
-                          {advisor.email && <p>{advisor.email}</p>}
+                          {advisor.email && <span>{advisor.email}</span>}
 
-                          <p>
-                            Due after:{" "}
+                          <span>
+                            Due:{" "}
                             <span className="text-body">
                               {formatDueTime(trigger.dueInMinutes)}
                             </span>
-                          </p>
+                          </span>
                         </div>
                       </div>
 
-                      <div className="flex shrink-0 gap-2">
+                      <div className="flex shrink-0 gap-1.5">
                         <Button
                           variant="outline"
                           size="sm"

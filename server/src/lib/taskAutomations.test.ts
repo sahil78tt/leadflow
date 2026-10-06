@@ -2,13 +2,13 @@ import "dotenv/config";
 
 import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import mongoose, { Types } from "mongoose";
+import mongoose, { Types, type HydratedDocument } from "mongoose";
 
 import { Brokerage } from "../models/Brokerage.js";
-import { Lead } from "../models/Lead.js";
+import { Lead, type ILead } from "../models/Lead.js";
 import { Task } from "../models/Task.js";
 import { TaskTrigger } from "../models/TaskTrigger.js";
-import { User } from "../models/User.js";
+import { User, type IUser } from "../models/User.js";
 import { skipTenant } from "./tenantPlugin.js";
 import { tenantStorage } from "./tenantContext.js";
 import { processStageTask } from "./taskAutomations.js";
@@ -19,11 +19,15 @@ if (!TEST_URI) {
   throw new Error("MONGODB_URI_TEST is required");
 }
 
-let brokerageA: any;
-let brokerageB: any;
-let advisorA: any;
-let advisorB: any;
-let leadA: any;
+type TestBrokerage = {
+  _id: Types.ObjectId;
+};
+
+let brokerageA: TestBrokerage;
+let brokerageB: TestBrokerage;
+let advisorA: HydratedDocument<IUser>;
+let advisorB: HydratedDocument<IUser>;
+let leadA: HydratedDocument<ILead>;
 
 async function runAsTenant<T>(brokerageId: string, fn: () => Promise<T>) {
   return tenantStorage.run(

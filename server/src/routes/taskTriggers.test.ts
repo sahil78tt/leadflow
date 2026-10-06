@@ -1,18 +1,14 @@
-import {
-  after,
-  before,
-  beforeEach,
-  describe,
-  it,
-} from "node:test";
+import "dotenv/config";
+
+import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import mongoose, { Types } from "mongoose";
+import mongoose, { type HydratedDocument } from "mongoose";
 import request from "supertest";
 
 import { app } from "../app.js";
 import { Brokerage } from "../models/Brokerage.js";
 import { TaskTrigger } from "../models/TaskTrigger.js";
-import { User } from "../models/User.js";
+import { User, type IUser } from "../models/User.js";
 import { signToken } from "../lib/jwt.js";
 import { skipTenant } from "../lib/tenantPlugin.js";
 
@@ -22,17 +18,21 @@ if (!TEST_URI) {
   throw new Error("MONGODB_URI_TEST is required");
 }
 
-let brokerageA: any;
-let brokerageB: any;
-let adminA: any;
-let advisorA: any;
-let advisorB: any;
+type TestBrokerage = {
+  _id: mongoose.Types.ObjectId;
+};
 
-function token(user: any) {
+let brokerageA: TestBrokerage;
+let brokerageB: TestBrokerage;
+let adminA: HydratedDocument<IUser>;
+let advisorA: HydratedDocument<IUser>;
+let advisorB: HydratedDocument<IUser>;
+
+function token(user: HydratedDocument<IUser>) {
   return signToken({
     id: user._id.toString(),
     role: user.role,
-    brokerageId: user.brokerageId?.toString(),
+    brokerageId: user.brokerageId ? user.brokerageId.toString() : null,
   });
 }
 
@@ -153,10 +153,7 @@ describe("TaskTrigger routes", () => {
       });
 
     assert.equal(res.status, 404);
-    assert.equal(
-      res.body.error,
-      "Advisor not found in this brokerage",
-    );
+    assert.equal(res.body.error, "Advisor not found in this brokerage");
   });
 
   it("allows only one trigger per pipeline stage", async () => {
@@ -210,10 +207,7 @@ describe("TaskTrigger routes", () => {
       });
 
     assert.equal(updated.status, 200);
-    assert.equal(
-      updated.body.trigger.title,
-      "Review proposal with client",
-    );
+    assert.equal(updated.body.trigger.title, "Review proposal with client");
     assert.equal(updated.body.trigger.dueInMinutes, 240);
     assert.equal(updated.body.trigger.enabled, false);
   });

@@ -1,18 +1,12 @@
-import {
-  after,
-  before,
-  beforeEach,
-  describe,
-  it,
-} from "node:test";
+import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import mongoose, { Types } from "mongoose";
+import mongoose, { Types, type HydratedDocument } from "mongoose";
 import request from "supertest";
 
 import { app } from "../app.js";
 import { Brokerage } from "../models/Brokerage.js";
 import { Task } from "../models/Task.js";
-import { User } from "../models/User.js";
+import { User, type IUser } from "../models/User.js";
 import { signToken } from "../lib/jwt.js";
 import { skipTenant } from "../lib/tenantPlugin.js";
 import { tenantStorage } from "../lib/tenantContext.js";
@@ -23,17 +17,21 @@ if (!TEST_URI) {
   throw new Error("MONGODB_URI_TEST is required");
 }
 
-let brokerageA: any;
-let brokerageB: any;
-let adminA: any;
-let advisorA: any;
-let advisorB: any;
+type TestBrokerage = {
+  _id: Types.ObjectId;
+};
 
-function token(user: any) {
+let brokerageA: TestBrokerage;
+let brokerageB: TestBrokerage;
+let adminA: HydratedDocument<IUser>;
+let advisorA: HydratedDocument<IUser>;
+let advisorB: HydratedDocument<IUser>;
+
+function token(user: HydratedDocument<IUser>) {
   return signToken({
     id: user._id.toString(),
     role: user.role,
-    brokerageId: user.brokerageId?.toString(),
+    brokerageId: user.brokerageId ? user.brokerageId.toString() : null,
   });
 }
 
@@ -57,9 +55,7 @@ async function createTask(options: {
         title: options.title ?? "Follow up with lead",
         description: "Test task description",
         assignedTo: options.assignedTo,
-        dueAt:
-          options.dueAt ??
-          new Date(Date.now() + 60 * 60 * 1000),
+        dueAt: options.dueAt ?? new Date(Date.now() + 60 * 60 * 1000),
         status: options.status ?? "pending",
         triggerStage: "new",
       });
@@ -148,10 +144,7 @@ describe("Task routes", () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.tasks.length, 1);
     assert.equal(res.body.tasks[0].title, "Advisor A task");
-    assert.equal(
-      res.body.tasks[0].assignedTo.id,
-      advisorA._id.toString(),
-    );
+    assert.equal(res.body.tasks[0].assignedTo.id, advisorA._id.toString());
   });
 
   it("brokerage admin can see all tasks in their brokerage", async () => {
@@ -174,7 +167,7 @@ describe("Task routes", () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.tasks.length, 2);
 
-    const titles = res.body.tasks.map((task: any) => task.title);
+    const titles = res.body.tasks.map((task: { title: string }) => task.title);
 
     assert.ok(titles.includes("Advisor task"));
     assert.ok(titles.includes("Admin task"));

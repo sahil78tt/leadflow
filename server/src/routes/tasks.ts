@@ -1,6 +1,8 @@
 import { Router } from "express";
+import type { Types } from "mongoose";
 import { z } from "zod";
 import { Task } from "../models/Task.js";
+import type { ITask } from "../models/Task.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { isObjectId } from "../lib/ids.js";
 
@@ -8,29 +10,80 @@ const router = Router();
 
 const statusSchema = z.enum(["pending", "completed"]);
 
-function publicTask(task: any) {
+type PopulatedUser = {
+  _id: Types.ObjectId;
+  name: string;
+  email: string;
+};
+
+type PopulatedLead = {
+  _id: Types.ObjectId;
+  name: string;
+  email?: string;
+  phone?: string;
+  stage: string;
+};
+
+type PopulatedTask = Omit<ITask, "assignedTo" | "leadId"> & {
+  _id: Types.ObjectId;
+  assignedTo?: PopulatedUser | Types.ObjectId;
+  leadId?: PopulatedLead | Types.ObjectId;
+};
+
+function isPopulatedUser(
+  value: PopulatedTask["assignedTo"],
+): value is PopulatedUser {
+  return (
+    value !== undefined &&
+    value !== null &&
+    typeof value === "object" &&
+    "name" in value &&
+    "email" in value
+  );
+}
+
+function isPopulatedLead(
+  value: PopulatedTask["leadId"],
+): value is PopulatedLead {
+  return (
+    value !== undefined &&
+    value !== null &&
+    typeof value === "object" &&
+    "name" in value &&
+    "stage" in value
+  );
+}
+
+function publicTask(task: PopulatedTask) {
   const now = new Date();
 
   return {
     id: task._id.toString(),
-    leadId: task.leadId?.toString(),
+    leadId: isPopulatedLead(task.leadId)
+      ? task.leadId._id.toString()
+      : task.leadId?.toString(),
+
     title: task.title,
     description: task.description,
-    assignedTo: task.assignedTo
+
+    assignedTo: isPopulatedUser(task.assignedTo)
       ? {
-          id: task.assignedTo._id?.toString(),
+          id: task.assignedTo._id.toString(),
           name: task.assignedTo.name,
           email: task.assignedTo.email,
         }
       : null,
+
     dueAt: task.dueAt,
     status: task.status,
     completedAt: task.completedAt ?? null,
     triggerId: task.triggerId?.toString(),
     triggerStage: task.triggerStage,
+
     overdue:
       task.status === "pending" &&
       new Date(task.dueAt).getTime() < now.getTime(),
+
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
   };
@@ -47,9 +100,7 @@ router.get(
       filter.assignedTo = req.user.id;
     }
 
-    const status = req.query.status
-      ? String(req.query.status)
-      : undefined;
+    const status = req.query.status ? String(req.query.status) : undefined;
 
     if (status) {
       const parsedStatus = statusSchema.safeParse(status);
@@ -74,18 +125,22 @@ router.get(
       .lean();
 
     return res.json({
-      tasks: tasks.map((task) => ({
-        ...publicTask(task),
-        lead: task.leadId
-          ? {
-              id: (task.leadId as any)._id?.toString(),
-              name: (task.leadId as any).name,
-              email: (task.leadId as any).email,
-              phone: (task.leadId as any).phone,
-              stage: (task.leadId as any).stage,
-            }
-          : null,
-      })),
+      tasks: tasks.map((rawTask) => {
+        const task = rawTask as unknown as PopulatedTask;
+
+        return {
+          ...publicTask(task),
+          lead: isPopulatedLead(task.leadId)
+            ? {
+                id: task.leadId._id.toString(),
+                name: task.leadId.name,
+                email: task.leadId.email,
+                phone: task.leadId.phone,
+                stage: task.leadId.stage,
+              }
+            : null,
+        };
+      }),
     });
   },
 );
@@ -130,7 +185,7 @@ router.patch(
     }
 
     return res.json({
-      task: publicTask(task),
+      task: publicTask(task as unknown as PopulatedTask),
     });
   },
 );
@@ -177,7 +232,7 @@ router.patch(
     }
 
     return res.json({
-      task: publicTask(task),
+      task: publicTask(task as unknown as PopulatedTask),
     });
   },
 );

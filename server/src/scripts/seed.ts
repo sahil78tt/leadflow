@@ -4,7 +4,9 @@ import { connectDb } from "../config/db.js";
 import { Brokerage } from "../models/Brokerage.js";
 import { Lead, type Stage } from "../models/Lead.js";
 import { User, type Role } from "../models/User.js";
+import { Client } from "../models/Client.js";
 import { skipTenant } from "../lib/tenantPlugin.js";
+import { tenantStorage } from "../lib/tenantContext.js";
 
 const PASSWORD = process.env.SEED_PASSWORD ?? "ChangeMe123!";
 
@@ -146,6 +148,76 @@ async function ensureLeads(
 
 await ensureLeads(a._id, sampleLeads); // Muster Finanz GmbH
 await ensureLeads(b._id, otherLeads); // Hausbau Partner AG
+
+await tenantStorage.run(
+  { brokerageId: a._id.toString(), role: "seed" },
+  async () => {
+    const advisor = await skipTenant(
+      User.findOne({
+        email: "advisor@muster.test",
+        role: "advisor",
+      }),
+    );
+
+    if (!advisor) throw new Error("Seed advisor not found");
+
+    let lead = await Lead.findOne({
+      email: "demo.client@leadflow.test",
+    });
+
+    if (!lead) {
+      lead = await Lead.create({
+        name: "Demo Client",
+        email: "demo.client@leadflow.test",
+        phone: "+491701234599",
+        stage: "won",
+        source: "seed",
+        brokerageId: a._id,
+      });
+    }
+
+    let user = await User.findOne({
+      email: "client@muster.test",
+      role: "client",
+    });
+
+    if (!user) {
+      const passwordHash = await bcrypt.hash("ClientDemo123!", 12);
+
+      user = await User.create({
+        name: "Demo Client",
+        email: "client@muster.test",
+        role: "client",
+        brokerageId: a._id,
+        passwordHash,
+      });
+    }
+
+    let client = await Client.findOne({
+      leadId: lead._id,
+    });
+
+    if (!client) {
+      client = await Client.create({
+        brokerageId: a._id,
+        leadId: lead._id,
+        userId: user._id,
+        advisorId: advisor._id,
+        name: "Demo Client",
+        email: "client@muster.test",
+        phone: lead.phone,
+      });
+    }
+
+    if (!lead.clientId) {
+      lead.clientId = client._id;
+      lead.stage = "won";
+      await lead.save();
+    }
+
+    console.log("Demo client login: client@muster.test / ClientDemo123!");
+  },
+);
 
 console.log(`Webhook "Muster Finanz GmbH":   POST /api/leads/webhook/${a.id}`);
 

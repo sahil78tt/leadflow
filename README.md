@@ -1,144 +1,414 @@
 # LeadFlow
 
-Multi-tenant lead and document platform for German mortgage brokerages. Brokerage teams capture leads, move them through a pipeline, convert them into clients, and collect documents that are checked automatically. One deployment serves many brokerages, each fully isolated from the others.
+<p align="center">
+  Multi-tenant lead and document platform for mortgage brokerages.
+</p>
 
-- **Live app:** `<vercel url>` · **API:** `<render url>` · **Walkthrough video:** `<video url>`
-- Roles: platform admin, brokerage admin, advisor, client. The platform admin role exists in the data model but has no screens (see Known limitations).
+<p align="center">
+  <a href="https://leadflow-one-opal.vercel.app/">
+    <img src="https://img.shields.io/badge/Live%20Demo-LeadFlow-5e6ad2?style=for-the-badge" alt="Live Demo" />
+  </a>
+</p>
 
-## Stack
+<p align="center">
+  <img src="https://img.shields.io/badge/React-TypeScript-61DAFB?style=for-the-badge&logo=react&logoColor=white" />
+  <img src="https://img.shields.io/badge/Node.js-Express-339933?style=for-the-badge&logo=node.js&logoColor=white" />
+  <img src="https://img.shields.io/badge/MongoDB-Atlas-47A248?style=for-the-badge&logo=mongodb&logoColor=white" />
+  <img src="https://img.shields.io/badge/Socket.IO-Realtime-black?style=for-the-badge&logo=socket.io&logoColor=white" />
+  <img src="https://img.shields.io/badge/Redis-Upstash-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
+  <img src="https://img.shields.io/badge/Cloudinary-Documents-3448C5?style=for-the-badge&logo=cloudinary&logoColor=white" />
+  <img src="https://img.shields.io/badge/Resend-Email-black?style=for-the-badge" />
+</p>
 
-React + TypeScript, Shadcn UI, Tailwind (Vercel/Geist design tokens) · Node + Express 5 · MongoDB Atlas (Mongoose) · JWT + bcrypt · Socket.IO · Cloudinary · Upstash Redis · Resend · Render (API) + Vercel (client).
+---
 
-## How the hard parts work
+## What is LeadFlow?
 
-- **Tenant isolation.** Every tenant collection carries `brokerageId`. A Mongoose plugin (`server/src/lib/tenantPlugin.ts`) reads the brokerage from the verified JWT through `AsyncLocalStorage` and rewrites every query, aggregate and insert. With no tenant context it throws instead of running unscoped (fail closed), so a correct guess of another brokerage's lead id returns nothing. The only opt-outs are explicit `skipTenant(...)` calls (login, seed, startup recovery).
-- **Webhook and duplicates.** `POST /api/leads/webhook/:brokerageId` normalizes email and phone and relies on partial unique indexes, not check-then-insert, so simultaneous submissions cannot both succeed. An `Idempotency-Key` header is supported. A new lead and a duplicate return the identical `202`, so the endpoint cannot be used to find out whether an email is already a lead.
-- **Concurrent edits.** Stage moves are an atomic compare-and-set on a `version` field. The loser gets `409` plus the current state, and the board corrects itself.
-- **Conversion.** Lead to client creates the client, its portal login and the lead update in one MongoDB transaction. A failure anywhere leaves nothing behind.
-- **Documents.** Uploads go through the API to Cloudinary as private assets, with the file type decided from the file's content. Checks are simulated (slow, about 15% random failure) as an atomically claimed state machine (`pending -> checking -> verified | failed`) with restart recovery. Files are opened through short-lived signed links.
-- **Real time.** Socket.IO, one room per brokerage for staff and one per client. A client only ever receives their own document events.
-- **Dashboard cache.** Pipeline counts are cached in Redis under an epoch-versioned key. Invalidation bumps the epoch, so a slow request cannot write stale counts back. If Redis is down, the app keeps working without the cache.
-- **Welcome email.** One hardcoded Resend email when a lead enters New: at most once per lead, HTML-escaped, with a per-brokerage daily cap.
+LeadFlow is a MERN-based multi-tenant platform for mortgage brokerages.
 
-## Run locally
+It handles the workflow from **lead → advisor pipeline → client → documents**.
 
-```bash
-# server
-cd server
-cp .env.example .env        # fill in the values below
-npm install
-npm run seed                # two brokerages, users, sample leads; prints the webhook URLs
-npm run dev                 # http://localhost:4000
+The application supports multiple brokerages from the same deployment while keeping their users and data isolated.
 
-# client
-cd client
-cp .env.example .env
-npm install
-npm run dev                 # http://localhost:5173
+---
+
+## Features
+
+- **Multi-Tenant Architecture**
+  - Each brokerage has isolated users, leads, clients, documents, templates and tasks.
+  - Tenant context is taken from the authenticated user and applied to database queries.
+
+- **External Lead Ingestion**
+  - Google Forms → Google Sheets → Apps Script → LeadFlow webhook.
+  - Leads are added automatically to the pipeline.
+
+- **Duplicate Lead Detection**
+  - Email and phone numbers are normalized.
+  - Database constraints prevent duplicate leads.
+  - Webhook also supports `Idempotency-Key`.
+
+- **Live Pipeline**
+  - Leads move through:
+    `New → Contacted → Qualified → Proposal → Won / Lost`
+  - Socket.IO keeps the pipeline updated across open screens.
+
+- **Concurrent Updates**
+  - Lead stage updates use a version check.
+  - If two advisors update the same lead, one update is rejected instead of silently overwriting the other.
+
+- **Lead to Client Conversion**
+  - An advisor can convert a lead into a client.
+  - Client login and lead conversion are created together using a MongoDB transaction.
+
+- **Client Documents**
+  - Clients can upload documents from the portal.
+  - Files are stored privately using Cloudinary.
+  - Documents have live checking status.
+
+- **Background Document Checks**
+  - Document checking is simulated asynchronously.
+  - Status moves through:
+    `pending → checking → verified / failed`
+  - Checks can fail intentionally to simulate real processing.
+
+- **Dashboard**
+  - Pipeline counts are cached using Upstash Redis.
+  - Cache invalidation uses an epoch version so stale requests do not overwrite newer data.
+
+- **Email Templates**
+  - Brokerage admins can create, edit, enable/disable and delete templates.
+  - Supports placeholders such as:
+    `{{clientName}}`, `{{advisorName}}`, `{{leadName}}`, `{{brokerageName}}`
+
+- **Email Triggers**
+  - An email template can be linked to a pipeline stage.
+  - When a lead enters that stage, the configured email is sent through Resend.
+  - Email delivery status is stored to prevent duplicate sends.
+
+- **Task Triggers**
+  - Brokerage admins can configure a task for a pipeline stage.
+  - Tasks contain an assigned advisor and due time.
+  - Duplicate task creation is prevented.
+
+- **Advisor Tasks**
+  - Advisors can see their assigned tasks.
+  - Tasks can be completed or reopened.
+  - Overdue pending tasks are highlighted.
+
+---
+
+## Tech Stack
+
+### Frontend
+
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- Shadcn UI
+- React Router
+
+### Backend
+
+- Node.js
+- Express 5
+- TypeScript
+- Mongoose
+- JWT
+- bcrypt
+- Socket.IO
+
+### Services
+
+- MongoDB Atlas
+- Upstash Redis
+- Cloudinary
+- Resend
+- Google Forms / Google Sheets / Apps Script
+
+### Deployment
+
+- Vercel — Frontend
+- Render — Backend
+
+---
+
+## Architecture
+
+```text
+Google Form
+    ↓
+Google Sheet
+    ↓
+Apps Script
+    ↓
+LeadFlow Webhook
+    ↓
+Express API
+    ├── MongoDB Atlas
+    ├── Upstash Redis
+    ├── Cloudinary
+    ├── Resend
+    └── Socket.IO
+          ↓
+     React Frontend
 ```
 
-Seeded users (all use `SEED_PASSWORD`, default `ChangeMe123!`, so set your own for anything public):
-`advisor@muster.test`, `admin@muster.test` (Muster Finanz GmbH) · `advisor@hausbau.test` (Hausbau Partner AG) · `admin@leadflow.test` (platform admin).
+The backend uses the authenticated user's `brokerageId` to keep brokerage data isolated.
 
-### Environment variables
+---
 
-| Variable                                                               | Where                | Purpose                                                                                               |
-| ---------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`                                                          | server               | Atlas connection string                                                                               |
-| `MONGODB_URI_TEST`                                                     | server (tests)       | A separate database whose name contains `test`; tests refuse to run elsewhere                         |
-| `JWT_SECRET`                                                           | server               | At least 32 characters; must be identical wherever tokens are verified                                |
-| `CLIENT_URL`                                                           | server               | Exact frontend origin (CORS and Socket.IO)                                                            |
-| `PORT`                                                                 | server               | Provided by Render                                                                                    |
-| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | server               | Document storage (uploads fail without them)                                                          |
-| `UPSTASH_REDIS_URL`                                                    | server               | `rediss://...` URL (the dashboard runs uncached without it)                                           |
-| `RESEND_API_KEY`, `EMAIL_FROM`                                         | server               | Welcome email (disabled without the key; the default sender only delivers to your own Resend address) |
-| `SEED_PASSWORD`                                                        | server (seed, smoke) | Password for seeded users                                                                             |
-| `VITE_API_URL`                                                         | client               | API base URL, baked in at build time                                                                  |
+## Project Structure
 
-## Tests
-
-```bash
-cd server
-npm run typecheck && npm run lint && npm test
+```text
+LeadFlow/
+│
+├── client/
+│   └── src/
+│       ├── components/
+│       ├── context/
+│       ├── lib/
+│       ├── pages/
+│       │   ├── Dashboard.tsx
+│       │   ├── EmailTemplates.tsx
+│       │   ├── EmailTriggers.tsx
+│       │   ├── TaskTriggers.tsx
+│       │   └── Tasks.tsx
+│       └── App.tsx
+│
+├── server/
+│   └── src/
+│       ├── lib/
+│       │   ├── tenantPlugin.ts
+│       │   ├── stageAutomations.ts
+│       │   └── taskAutomations.ts
+│       ├── models/
+│       │   ├── Lead.ts
+│       │   ├── Client.ts
+│       │   ├── Document.ts
+│       │   ├── EmailTemplate.ts
+│       │   ├── EmailTrigger.ts
+│       │   ├── EmailDelivery.ts
+│       │   ├── Task.ts
+│       │   └── TaskTrigger.ts
+│       ├── routes/
+│       │   ├── auth.ts
+│       │   ├── leads.ts
+│       │   ├── documents.ts
+│       │   ├── dashboard.ts
+│       │   ├── emailTemplates.ts
+│       │   ├── emailTriggers.ts
+│       │   ├── taskTriggers.ts
+│       │   └── tasks.ts
+│       └── app.ts
+│
+├── PROMPTS.md
+└── README.md
 ```
 
-Backend tests use Node's built-in runner with Supertest. They run against a dedicated test database and stub Cloudinary, Resend and Redis. Tests are targeted at risky logic, not at a coverage number.
+---
 
-| Question worth asking                               | Where it is tested                                                                                                                                                                                   |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Can a correct ID guess reach another tenant's data? | `server/src/lib/tenantPlugin.test.ts`, `server/src/routes/leads.board.test.ts`, `server/src/routes/conversion.test.ts`, `server/src/routes/documents.test.ts`, `server/src/routes/dashboard.test.ts` |
-| Are duplicate leads detected within a tenant?       | `server/src/routes/leads.webhook.test.ts`, `server/src/lib/normalize.test.ts`                                                                                                                        |
-| What if two advisors move the same lead at once?    | `server/src/routes/leads.board.test.ts`                                                                                                                                                              |
-| Is webhook ingestion idempotent under bursts?       | `server/src/routes/leads.webhook.test.ts`                                                                                                                                                            |
-| Is conversion all-or-nothing?                       | `server/src/routes/conversion.test.ts`                                                                                                                                                               |
-| Do the right sockets get the right events?          | `server/src/lib/socket.test.ts`, `server/src/routes/documents.test.ts`                                                                                                                               |
-| Is the cache correct and race-free?                 | `server/src/routes/dashboard.test.ts`                                                                                                                                                                |
-| Is the welcome email sent at most once?             | `server/src/routes/welcomeEmail.test.ts`                                                                                                                                                             |
+## User Roles
 
-**Consciously not tested (time):** frontend unit and component tests, end-to-end browser tests, real calls to Cloudinary, Resend and Upstash (stubbed in tests, checked by hand), and load tests.
+| Role            | Main Access                                                    |
+| --------------- | -------------------------------------------------------------- |
+| Platform Admin  | Platform-level administration                                  |
+| Brokerage Admin | Brokerage settings, email templates/triggers and task triggers |
+| Advisor         | Leads, pipeline and assigned tasks                             |
+| Client          | Own case and document uploads                                  |
 
-After a deploy: `cd server && npm run smoke -- <api url>` checks a running instance end to end.
+---
 
 ## Deployment
 
-**Atlas:** Network Access allows `0.0.0.0/0` (Render's free tier has no fixed IP). Use a database user's credentials in the URI, not your Atlas login.
+| Part      | Platform      | URL                                   |
+| --------- | ------------- | ------------------------------------- |
+| Frontend  | Vercel        | https://leadflow-one-opal.vercel.app/ |
+| Backend   | Render        | https://leadflow-rbdt.onrender.com    |
+| Database  | MongoDB Atlas | Private                               |
+| Redis     | Upstash       | Private                               |
+| Documents | Cloudinary    | Private                               |
+| Email     | Resend        | External service                      |
 
-**Render (API), Web Service:**
+Backend health check:
 
-| Setting           | Value                                                                          |
-| ----------------- | ------------------------------------------------------------------------------ |
-| Root Directory    | `server`                                                                       |
-| Build Command     | `npm install --include=dev && npm run build`                                   |
-| Start Command     | `npm start`                                                                    |
-| Health Check Path | `/health`                                                                      |
-| Environment       | every server variable above except `PORT`, `MONGODB_URI_TEST`, `SEED_PASSWORD` |
-
-**Vercel (client):** Root Directory `client`, framework Vite, environment variable `VITE_API_URL` set to the Render URL (no trailing slash). `client/vercel.json` rewrites all routes to `index.html`.
-
-**Order:** deploy the API, deploy the client with `VITE_API_URL`, set `CLIENT_URL` on Render to the Vercel URL, then start the API once on the new database (it builds its indexes at boot) and seed it:
-
-```powershell
-cd server
-$env:MONGODB_URI = "<production connection string>"
-$env:SEED_PASSWORD = "<a password you will share privately>"
-npm run seed
-Remove-Item Env:MONGODB_URI, Env:SEED_PASSWORD
+```text
+https://leadflow-rbdt.onrender.com/health
 ```
 
-## Troubleshooting
+---
 
-### Hit during the build
+## Installation
 
-| Symptom                                                                                                        | Cause                                                                                               | Fix                                                                                                    |
-| -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `tsc -b` reports `Cannot find module '@/...'` while `npm run dev` works                                        | The `@` alias was added to `client/tsconfig.json`, but `tsc -b` compiles `client/tsconfig.app.json` | Add `"paths": { "@/*": ["./src/*"] }` to `client/tsconfig.app.json`                                    |
-| `TS7016 Could not find a declaration file for module 'express'` (or `bcrypt`, `jsonwebtoken`) after an install | An install left `devDependencies` incomplete                                                        | Reinstall the `@types/*` packages and check `server/package.json`                                      |
-| `'eslint' is not recognized`                                                                                   | Same cause: eslint missing from `devDependencies`                                                   | `npm i -D eslint typescript-eslint`                                                                    |
-| `bad auth: authentication failed`                                                                              | The URI holds the wrong database-user credentials, not an IP problem                                | Use the Database Access user; URL-encode special characters in the password                            |
-| `req.params.id` is typed `string \| string[]`                                                                  | Express 5 types do not infer params once middleware precedes the handler                            | `String(req.params.id)`                                                                                |
-| Seed fails with `E11000 ... phone`                                                                             | A hand-posted lead already owns that normalized phone number                                        | The seed treats duplicates as already present                                                          |
-| Unique-index tests fail after `dropDatabase()`                                                                 | The drop removed the indexes                                                                        | Call `Model.syncIndexes()` in test setup                                                               |
-| Tenant context missing after multer, so queries throw                                                          | `AsyncLocalStorage` context does not survive stream callbacks                                       | Re-bind with `bindTenant` after the upload middleware                                                  |
-| Hausbau showed 4 leads instead of 3                                                                            | A lead posted by hand during a manual webhook test                                                  | Not a bug: delete the stray test lead                                                                  |
-| Resend rejects a welcome email                                                                                 | The default sender only delivers to your own Resend address                                         | Verify a domain and set `EMAIL_FROM`; the failure is recorded on the lead and never breaks the request |
+### 1. Clone the repository
 
-### Anticipated for deployment (not yet encountered)
+```bash
+git clone https://github.com/sahil78tt/leadflow
+cd LeadFlow
+```
 
-| Symptom                                                               | Likely cause                                                                        | First thing to try                                                          |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| CORS errors between client and API, including the Socket.IO handshake | `CLIENT_URL` differs from the real frontend origin (Vercel preview URLs differ too) | Make `CLIENT_URL` match the production origin exactly, then restart the API |
-| Refreshing `/dashboard` on Vercel gives a 404                         | Missing SPA rewrite                                                                 | `client/vercel.json`                                                        |
-| `invalid signature` right after deploying                             | `JWT_SECRET` differs between environments                                           | Use one value everywhere; old tokens stop working when it changes           |
-| First request takes about a minute                                    | Render's free instance was asleep                                                   | Expected: a known limitation, not a bug                                     |
-| Mongoose connection timeout                                           | Atlas allowlist or connection string                                                | Allow `0.0.0.0/0`; recheck the URI                                          |
-| The client still calls `localhost`                                    | `VITE_API_URL` is baked in at build time                                            | Set it on Vercel, then redeploy                                             |
+### 2. Install backend dependencies
 
-## Known limitations
+```bash
+cd server
+npm install
+```
 
-- The webhook is unauthenticated. The welcome email's daily cap limits the damage. A per-brokerage signing secret and rate limiting would fix it.
-- Client portal logins use a one-time temporary password with no reset or forced change. Expiring invite links would fix it.
-- Document checks are simulated and run in-process on one instance. A real queue (BullMQ on Redis) would replace them.
-- JWTs are stateless: a deactivated user keeps access until the token expires (8 hours), and sockets outlive tokens.
-- Socket.IO uses the in-memory adapter, so it runs on a single instance. A Redis adapter would fix it.
-- The platform admin role has no screens. There is no advisor or client management UI, no consent or opt-out for the welcome email, and no documents checklist.
-- Render's free tier spins down after inactivity.
+Create `.env` and add the required environment variables.
+
+### 3. Seed the database
+
+```bash
+npm run seed
+```
+
+### 4. Start the backend
+
+```bash
+npm run dev
+```
+
+### 5. Install frontend dependencies
+
+Open another terminal:
+
+```bash
+cd client
+npm install
+```
+
+Create the frontend `.env` file and start the client:
+
+```bash
+npm run dev
+```
+
+---
+
+## Environment Variables
+
+### Server
+
+```env
+MONGODB_URI=
+MONGODB_URI_TEST=
+JWT_SECRET=
+CLIENT_URL=
+PORT=
+
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+
+UPSTASH_REDIS_URL=
+
+RESEND_API_KEY=
+EMAIL_FROM=
+
+SEED_PASSWORD=
+```
+
+### Client
+
+```env
+VITE_API_URL=
+```
+
+Never commit real secrets to the repository.
+
+---
+
+## Testing
+
+The backend has targeted tests for the main workflows and security-sensitive areas.
+
+The latest tests for the email and task automation work:
+
+```text
+Email Templates    7
+Email Triggers     7
+Task Triggers      7
+Tasks API          8
+Task Automation    5
+---------------------
+Total             34
+Passed            34
+Failed             0
+```
+
+Backend build:
+
+```bash
+cd server
+npm run build
+```
+
+Frontend build:
+
+```bash
+cd client
+npm run build
+```
+
+Both builds pass.
+
+---
+
+## Security
+
+- JWT authentication
+- bcrypt password hashing
+- Role-based authorization
+- Brokerage-level tenant isolation
+- Fail-closed tenant context
+- MongoDB unique constraints
+- Idempotent lead webhook
+- Atomic lead stage updates
+- MongoDB transaction for lead conversion
+- Private Cloudinary documents
+- Signed document URLs
+- Brokerage-scoped Socket.IO events
+- Client-specific document events
+
+---
+
+## Known Limitations
+
+This was built as a 5–7 day assignment, so some production-level features are intentionally simplified.
+
+- Document checking is simulated instead of using a real document verification service.
+- Background processing currently runs in the application process rather than a durable job queue.
+- Socket.IO currently uses the in-memory adapter, so horizontal scaling would require a Redis adapter.
+- The lead webhook does not currently use per-brokerage HMAC signing.
+- JWTs are stateless, so user deactivation does not immediately invalidate an already-issued token.
+- Client password reset/change flow is not fully implemented.
+- Platform admin UI is limited.
+- There is no dedicated reminder/notification system for overdue tasks.
+- Production Resend email delivery requires a verified sender domain.
+- Frontend E2E tests are not currently implemented.
+
+These are the main areas I would address next for a production version.
+
+---
+
+## Assignment Coverage
+
+| Requirement             | Implementation                                |
+| ----------------------- | --------------------------------------------- |
+| Multi-brokerage support | Brokerage-scoped tenant isolation             |
+| External lead source    | Google Forms + Apps Script webhook            |
+| Live pipeline           | React + Socket.IO                             |
+| Duplicate detection     | Normalization + unique indexes + idempotency  |
+| Lead → client           | MongoDB transaction + client portal           |
+| Document workflow       | Cloudinary + simulated background checks      |
+| Fast dashboard          | Upstash Redis + cache invalidation            |
+| Email templates         | Brokerage admin CRUD + placeholders           |
+| Email triggers          | Pipeline stage → configured template → Resend |
+| Task triggers           | Pipeline stage → advisor task + due date      |
+| Overdue tasks           | Calculated by API + highlighted in UI         |
+
+---
+
+<p align="center">
+  LeadFlow — MERN Developer Assignment
+</p>
