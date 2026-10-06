@@ -9,7 +9,8 @@ import { emitLeadDuplicate } from "../lib/socket.js";
 import { tenantStorage } from "../lib/tenantContext.js";
 import { normalizeEmail, normalizePhone } from "../lib/normalize.js";
 import { convertLead } from "../lib/convertLead.js";
-import { sendWelcomeEmail } from "../lib/welcomeEmail.js";
+import { processStageEmail } from "../lib/stageAutomations.js";
+import { processStageTask } from "../lib/taskAutomations.js";
 import { env } from "../config/env.js";
 
 const router = Router();
@@ -76,7 +77,17 @@ router.patch(
       const lead = publicLead(updated);
       await publishLeadChange(updated.brokerageId.toString(), lead); // everyone on this brokerage's board
       // Not awaited: a slow or failing email never delays or fails the move.
-      if (stage === "new") void sendWelcomeEmail(welcomeTarget(updated));
+      void processStageEmail({
+        leadId: updated.id as string,
+        brokerageId: updated.brokerageId.toString(),
+        stage: updated.stage,
+        actorId: req.user?.id,
+      });
+      void processStageTask({
+        leadId: updated.id as string,
+        brokerageId: updated.brokerageId.toString(),
+        stage: updated.stage,
+      });
       return res.json({ lead });
     }
 
@@ -250,7 +261,16 @@ router.post("/webhook/:brokerageId", async (req, res) => {
     await publishLeadChange(brokerageId, publicLead(created));
 
     // A new lead starts in New; not awaited so email failures do not break ingestion.
-    void sendWelcomeEmail(welcomeTarget(created));
+    void processStageEmail({
+      leadId: created.id as string,
+      brokerageId: created.brokerageId.toString(),
+      stage: created.stage,
+    });
+    void processStageTask({
+      leadId: created.id as string,
+      brokerageId: created.brokerageId.toString(),
+      stage: created.stage,
+    });
   } else if (duplicate) {
     // Notify only staff belonging to this brokerage.
     // The external caller still receives the same neutral response.

@@ -9,6 +9,10 @@ import portalRoutes from "./routes/portal.js";
 import clientRoutes from "./routes/clients.js";
 import documentRoutes from "./routes/documents.js";
 import dashboardRoutes from "./routes/dashboard.js";
+import emailTemplateRoutes from "./routes/emailTemplates.js";
+import emailTriggerRoutes from "./routes/emailTriggers.js";
+import taskTriggerRoutes from "./routes/taskTriggers.js";
+import taskRoutes from "./routes/tasks.js";
 
 export const app = express();
 
@@ -23,5 +27,9 @@ app.use("/api/portal", portalRoutes);
 app.use("/api/clients", clientRoutes);
 app.use("/api/documents", documentRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/email-templates", emailTemplateRoutes);
+app.use("/api/email-triggers", emailTriggerRoutes);
+app.use("/api/task-triggers", taskTriggerRoutes);
+app.use("/api/tasks", taskRoutes);
 
 app.use(errorHandler);

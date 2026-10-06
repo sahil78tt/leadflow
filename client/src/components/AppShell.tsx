@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+﻿import { NavLink, Outlet } from "react-router-dom";
 import { useAuth, type Role } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,13 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
 
 export default function AppShell() {
   const { user, logout } = useAuth();
+
   return (
     <div className="grid min-h-screen grid-cols-[240px_1fr] bg-background text-foreground">
       <aside className="flex flex-col justify-between border-r border-sidebar-border bg-sidebar p-4">
         <div className="space-y-6">
           <div className="type-heading-md px-2">LeadFlow</div>
+
           <nav className="space-y-1">
             {user?.role === "platform_admin" ? (
               <NavLink to="/platform-admin" className={navClass}>
@@ -39,13 +41,35 @@ export default function AppShell() {
                 <NavLink to="/" end className={navClass}>
                   Pipeline
                 </NavLink>
+
                 <NavLink to="/dashboard" className={navClass}>
                   Dashboard
                 </NavLink>
+
+                <NavLink to="/tasks" className={navClass}>
+                  Tasks
+                </NavLink>
+
+                {user?.role === "brokerage_admin" && (
+                  <>
+                    <NavLink to="/email-templates" className={navClass}>
+                      Email Templates
+                    </NavLink>
+
+                    <NavLink to="/email-triggers" className={navClass}>
+                      Email Triggers
+                    </NavLink>
+
+                    <NavLink to="/task-triggers" className={navClass}>
+                      Task Triggers
+                    </NavLink>
+                  </>
+                )}
               </>
             )}
           </nav>
         </div>
+
         <div className="space-y-3 border-t border-sidebar-border pt-4">
           <div className="px-2">
             <p className="type-label">{user?.name}</p>
@@ -53,6 +77,7 @@ export default function AppShell() {
               {user ? ROLE_LABELS[user.role] : ""}
             </p>
           </div>
+
           <Button
             variant="ghost"
             size="sm"
@@ -63,6 +88,7 @@ export default function AppShell() {
           </Button>
         </div>
       </aside>
+
       <main className="min-w-0">
         <Outlet />
       </main>

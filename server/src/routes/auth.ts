@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import { z } from "zod";
 import { User } from "../models/User.js";
 import { signToken } from "../lib/jwt.js";
-import { authenticate } from "../middleware/auth.js";
+import { authenticate, requireRole } from "../middleware/auth.js";
 import { skipTenant } from "../lib/tenantPlugin.js";
 
 const router = Router();
@@ -45,6 +45,26 @@ router.post("/login", async (req, res) => {
   res.json({ token, user: publicUser(user) });
 });
 
+router.get(
+  "/advisors",
+  authenticate,
+  requireRole("brokerage_admin"),
+  async (_req, res) => {
+    const advisors = await User.find({ role: "advisor" })
+      .select("_id name email role")
+      .sort({ name: 1 })
+      .lean();
+
+    return res.json({
+      advisors: advisors.map((advisor) => ({
+        id: advisor._id.toString(),
+        name: advisor.name,
+        email: advisor.email,
+        role: advisor.role,
+      })),
+    });
+  },
+);
 router.get("/me", authenticate, async (req, res) => {
   const user = await User.findById(req.user!.id);
   if (!user) return res.status(401).json({ error: "User no longer exists" });
@@ -52,3 +72,5 @@ router.get("/me", authenticate, async (req, res) => {
 });
 
 export default router;
+
+
