@@ -59,6 +59,7 @@ function publicTask(task: PopulatedTask) {
 
   return {
     id: task._id.toString(),
+
     leadId: isPopulatedLead(task.leadId)
       ? task.leadId._id.toString()
       : task.leadId?.toString(),
@@ -130,6 +131,7 @@ router.get(
 
         return {
           ...publicTask(task),
+
           lead: isPopulatedLead(task.leadId)
             ? {
                 id: task.leadId._id.toString(),

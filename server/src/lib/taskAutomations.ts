@@ -38,7 +38,26 @@ async function createConfiguredTask(
     enabled: true,
   }).lean()) as (ITaskTrigger & { _id: Types.ObjectId }) | null;
 
+  // ================= DEBUG LOG START =================
+  console.log("TASK AUTOMATION DEBUG", {
+    brokerageId: target.brokerageId,
+    leadId: target.leadId,
+    stage: target.stage,
+    triggerFound: Boolean(trigger),
+    triggerId: trigger?._id?.toString(),
+    triggerEnabled: trigger?.enabled,
+    assignedTo: trigger?.assignedTo?.toString(),
+    dueInMinutes: trigger?.dueInMinutes,
+    title: trigger?.title,
+  });
+  // ================= DEBUG LOG END =================
+
   if (!trigger) {
+    console.warn("TASK AUTOMATION: no enabled trigger found", {
+      brokerageId: target.brokerageId,
+      stage: target.stage,
+    });
+
     return "skipped";
   }
 
@@ -74,13 +93,18 @@ async function createConfiguredTask(
   });
 
   if (!lead) {
+    console.warn("TASK AUTOMATION: lead not found", {
+      leadId: target.leadId,
+      brokerageId: target.brokerageId,
+    });
+
     return "skipped";
   }
 
   const dueAt = new Date(Date.now() + trigger.dueInMinutes * 60 * 1000);
 
   try {
-    await Task.create({
+    const created = await Task.create({
       brokerageId,
       leadId,
       title: trigger.title,
@@ -92,9 +116,25 @@ async function createConfiguredTask(
       triggerStage: target.stage,
     });
 
+    // ================= DEBUG LOG START =================
+    console.log("TASK AUTOMATION: task created", {
+      taskId: created._id.toString(),
+      leadId: target.leadId,
+      advisorId: advisor._id.toString(),
+      dueAt: dueAt.toISOString(),
+    });
+    // ================= DEBUG LOG END =================
+
     return "created";
   } catch (error) {
     if (isDuplicateKeyError(error)) {
+      // ================= DEBUG LOG START =================
+      console.log("TASK AUTOMATION: duplicate, already handled", {
+        leadId: target.leadId,
+        triggerId: trigger._id.toString(),
+      });
+      // ================= DEBUG LOG END =================
+
       return "already_handled";
     }
 
@@ -105,6 +145,17 @@ async function createConfiguredTask(
 export async function processStageTask(
   target: StageTaskTarget,
 ): Promise<StageTaskOutcome> {
+  // ================= DEBUG LOG START =================
+  console.log("TASK AUTOMATION: processStageTask called", {
+    leadId: target.leadId,
+    brokerageId: target.brokerageId,
+    stage: target.stage,
+    stageValid: STAGES.includes(target.stage),
+    brokerageIdValid: Types.ObjectId.isValid(target.brokerageId),
+    leadIdValid: Types.ObjectId.isValid(target.leadId),
+  });
+  // ================= DEBUG LOG END =================
+
   if (!STAGES.includes(target.stage)) {
     return "skipped";
   }

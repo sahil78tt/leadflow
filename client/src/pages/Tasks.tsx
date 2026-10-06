@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 type TaskStatus = "pending" | "completed";
 
 interface Task {
-  _id: string;
+  id: string;
   title: string;
   description?: string;
   dueAt: string;
@@ -14,14 +14,14 @@ interface Task {
   leadId:
     | string
     | {
-        _id: string;
+        id: string;
         name?: string;
         email?: string;
       };
   assignedTo:
     | string
     | {
-        _id: string;
+        id: string;
         name: string;
         email: string;
       };
@@ -32,7 +32,7 @@ interface Task {
 function leadInfo(task: Task) {
   if (typeof task.leadId === "string") {
     return {
-      _id: task.leadId,
+      id: task.leadId,
       name: "Lead",
       email: "",
     };
@@ -56,16 +56,17 @@ export default function Tasks() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const loadTasks = async () => {
-    setLoading(true);
+  const loadTasks = async (isInitial = false) => {
+    if (isInitial) {
+      setLoading(true);
+    }
+
     setError("");
 
     try {
       const query = status === "all" ? "" : `?status=${status}`;
 
-      const result = await api<{ tasks: Task[] }>(
-        `/api/tasks${query}`,
-      );
+      const result = await api<{ tasks: Task[] }>(`/api/tasks${query}`);
 
       setTasks(result.tasks);
     } catch (e: unknown) {
@@ -82,87 +83,94 @@ export default function Tasks() {
   };
 
   useEffect(() => {
-    void loadTasks();
+    void loadTasks(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  const updateTask = async (
-    task: Task,
-    action: "complete" | "reopen",
-  ) => {
-    setWorkingId(task._id);
+  const updateTask = async (task: Task, action: "complete" | "reopen") => {
+    setWorkingId(task.id);
     setError("");
     setMessage("");
 
     try {
       const result = await api<{ task: Task }>(
-        `/api/tasks/${task._id}/${action}`,
+        `/api/tasks/${task.id}/${action}`,
         {
           method: "PATCH",
         },
       );
 
-      setTasks((current) =>
-        current.map((item) =>
-          item._id === result.task._id ? result.task : item,
-        ),
-      );
+      setTasks((current) => {
+        const shouldRemove =
+          (status === "pending" && result.task.status === "completed") ||
+          (status === "completed" && result.task.status === "pending");
+
+        if (shouldRemove) {
+          return current.filter((item) => item.id !== result.task.id);
+        }
+
+        return current.map((item) =>
+          item.id === result.task.id ? result.task : item,
+        );
+      });
 
       setMessage(
-        action === "complete"
-          ? "Task marked as completed."
-          : "Task reopened.",
+        action === "complete" ? "Task marked as completed." : "Task reopened.",
       );
-
-      await loadTasks();
     } catch (e: unknown) {
       setError(
-        e instanceof Error
-          ? e.message
-          : `Failed to ${action} task`,
+        e instanceof ApiError && e.status === 403
+          ? "You do not have permission to update this task."
+          : e instanceof Error
+            ? e.message
+            : `Failed to ${action} task`,
       );
     } finally {
       setWorkingId(null);
     }
   };
 
-  const pendingCount = tasks.filter(
-    (task) => task.status === "pending",
-  ).length;
+  const pendingCount = tasks.filter((task) => task.status === "pending").length;
 
   const overdueCount = tasks.filter(
     (task) => task.status === "pending" && task.overdue,
   ).length;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 p-8">
+    <div className="mx-auto max-w-6xl space-y-6 p-6">
       <div className="space-y-1">
         <p className="type-eyebrow text-mute">Advisor workspace</p>
+
         <h1 className="type-heading-lg">Tasks</h1>
+
         <p className="text-sm text-mute">
-          Stay on top of follow-ups automatically created from your
-          pipeline stages.
+          Stay on top of follow-ups automatically created from your pipeline
+          stages.
         </p>
       </div>
 
-      {error && (
-        <p className="text-sm text-destructive">{error}</p>
-      )}
+      <div className="min-h-5">
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {message && <p className="text-sm text-body">{message}</p>}
+        {message && <p className="text-sm text-body">{message}</p>}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="type-eyebrow text-mute">Visible tasks</p>
+
           <p className="mt-2 text-2xl font-semibold">{tasks.length}</p>
         </div>
 
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="type-eyebrow text-mute">Pending</p>
+
           <p className="mt-2 text-2xl font-semibold">{pendingCount}</p>
         </div>
 
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="type-eyebrow text-mute">Overdue</p>
+
           <p
             className={
               overdueCount > 0
@@ -175,33 +183,35 @@ export default function Tasks() {
         </div>
       </div>
 
-      <section className="rounded-xl border border-border bg-card p-6">
+      <section className="rounded-xl border border-border bg-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="type-heading-md">My tasks</h2>
+
             <p className="mt-1 text-xs text-mute">
               Tasks are assigned to you by brokerage automation rules.
             </p>
           </div>
 
           <div className="flex gap-2">
-            {(["pending", "completed", "all"] as const).map(
-              (option) => (
-                <Button
-                  key={option}
-                  variant={status === option ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setStatus(option)}
-                >
-                  {option.charAt(0).toUpperCase() + option.slice(1)}
-                </Button>
-              ),
-            )}
+            {(["pending", "completed", "all"] as const).map((option) => (
+              <Button
+                key={option}
+                variant={status === option ? "default" : "outline"}
+                size="sm"
+                className="h-9 min-w-[88px]"
+                onClick={() => setStatus(option)}
+              >
+                {option.charAt(0).toUpperCase() + option.slice(1)}
+              </Button>
+            ))}
           </div>
         </div>
 
         {loading ? (
-          <p className="mt-6 text-sm text-mute">Loading tasks...</p>
+          <div className="mt-6 min-h-24 flex items-center">
+            <p className="text-sm text-mute">Loading tasks...</p>
+          </div>
         ) : tasks.length === 0 ? (
           <div className="mt-6 rounded-lg border border-border bg-muted/30 p-5">
             <p className="text-sm text-mute">
@@ -216,11 +226,11 @@ export default function Tasks() {
           <div className="mt-5 space-y-3">
             {tasks.map((task) => {
               const lead = leadInfo(task);
-              const isWorking = workingId === task._id;
+              const isWorking = workingId === task.id;
 
               return (
                 <div
-                  key={task._id}
+                  key={task.id}
                   className={
                     task.status === "pending" && task.overdue
                       ? "rounded-lg border border-destructive/50 bg-destructive/5 p-4"
@@ -251,9 +261,7 @@ export default function Tasks() {
                         </span>
                       </div>
 
-                      <h3 className="mt-2 font-medium">
-                        {task.title}
-                      </h3>
+                      <h3 className="mt-2 font-medium">{task.title}</h3>
 
                       {task.description && (
                         <p className="mt-1 text-sm text-mute">
@@ -275,8 +283,7 @@ export default function Tasks() {
                           Due:{" "}
                           <span
                             className={
-                              task.status === "pending" &&
-                              task.overdue
+                              task.status === "pending" && task.overdue
                                 ? "font-medium text-destructive"
                                 : "text-body"
                             }
@@ -296,27 +303,23 @@ export default function Tasks() {
                       </div>
                     </div>
 
-                    <div className="flex shrink-0 gap-2">
+                    <div className="flex h-9 shrink-0 gap-2">
                       {task.status === "pending" ? (
                         <Button
                           size="sm"
                           disabled={isWorking}
-                          onClick={() =>
-                            void updateTask(task, "complete")
-                          }
+                          className="h-9 w-[96px]"
+                          onClick={() => void updateTask(task, "complete")}
                         >
-                          {isWorking
-                            ? "Saving..."
-                            : "Complete"}
+                          {isWorking ? "Saving..." : "Complete"}
                         </Button>
                       ) : (
                         <Button
                           variant="outline"
                           size="sm"
                           disabled={isWorking}
-                          onClick={() =>
-                            void updateTask(task, "reopen")
-                          }
+                          className="h-9 w-[96px]"
+                          onClick={() => void updateTask(task, "reopen")}
                         >
                           {isWorking ? "Saving..." : "Reopen"}
                         </Button>
