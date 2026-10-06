@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import mongoose from "mongoose";
 import request from "supertest";
 import { app } from "../app.js";
+import { env } from "../config/env.js";
 import { Brokerage } from "../models/Brokerage.js";
 import { Lead } from "../models/Lead.js";
 import type { Role } from "../models/User.js";
@@ -183,6 +184,39 @@ describe("lead webhook", () => {
         .set("Content-Type", "application/json")
         .send("{bad");
       assert.equal(res.status, 400);
+    });
+
+    it("protects the webhook when a shared secret is configured", async () => {
+      const previousSecret = env.WEBHOOK_SECRET;
+      env.WEBHOOK_SECRET = "test-webhook-secret";
+
+      try {
+        const payload = {
+          name: "Secret Test",
+          email: "secret@example.de",
+        };
+
+        const missing = await request(app).post(hook(a)).send(payload);
+        assert.equal(missing.status, 401);
+        assert.equal(missing.body.error, "Invalid webhook secret");
+
+        const wrong = await request(app)
+          .post(hook(a))
+          .set("X-Webhook-Secret", "wrong-secret")
+          .send(payload);
+        assert.equal(wrong.status, 401);
+        assert.equal(wrong.body.error, "Invalid webhook secret");
+
+        const correct = await request(app)
+          .post(hook(a))
+          .set("X-Webhook-Secret", "test-webhook-secret")
+          .send(payload);
+        assert.equal(correct.status, 202);
+
+        assert.equal((await leadsOf(a)).length, 1);
+      } finally {
+        env.WEBHOOK_SECRET = previousSecret;
+      }
     });
   });
 

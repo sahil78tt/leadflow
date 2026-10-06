@@ -70,6 +70,11 @@ export function emitLeadChanged(brokerageId: string, lead: object) {
   io?.to(brokerageRoom(brokerageId)).emit("lead:changed", { lead });
 }
 
+/** Tells only staff in the matching brokerage that an incoming lead already exists. */
+export function emitLeadDuplicate(brokerageId: string, lead: object) {
+  io?.to(brokerageRoom(brokerageId)).emit("lead:duplicate", { lead });
+}
+
 /** Reaches the brokerage's staff and that one client, and nobody else. */
 export function emitDocumentChanged(
   brokerageId: string,

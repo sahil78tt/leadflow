@@ -210,6 +210,57 @@ describe("realtime board sync", () => {
       await silent;
     });
 
+    it("a duplicate submission emits a duplicate alert only to its own brokerage", async () => {
+      await hook(a, { name: "Duplicate Alert", email: "alert@example.de" });
+
+      const a1 = await connect(tokenFor(a));
+      const a2 = await connect(tokenFor(a));
+      const b1 = await connect(tokenFor(b));
+
+      const duplicateEvent = (socket: ClientSocket) =>
+        new Promise<ChangedEvent>((resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error('No "lead:duplicate" within 1500ms')),
+            1500,
+          );
+          socket.once("lead:duplicate", (payload: ChangedEvent) => {
+            clearTimeout(timer);
+            resolve(payload);
+          });
+        });
+
+      const noDuplicate = (socket: ClientSocket, ms = 300) =>
+        new Promise<void>((resolve, reject) => {
+          const onEvent = () =>
+            reject(new Error('Unexpected "lead:duplicate"'));
+          socket.once("lead:duplicate", onEvent);
+          setTimeout(() => {
+            socket.off("lead:duplicate", onEvent);
+            resolve();
+          }, ms);
+        });
+
+      const got1 = duplicateEvent(a1);
+      const got2 = duplicateEvent(a2);
+      const silent = noDuplicate(b1);
+
+      assert.equal(
+        (
+          await hook(a, {
+            name: "Duplicate Alert Again",
+            email: "alert@example.de",
+          })
+        ).status,
+        202,
+      );
+
+      const [event1, event2] = await Promise.all([got1, got2]);
+
+      assert.equal(event1.lead.name, "Duplicate Alert");
+      assert.equal(event2.lead.name, "Duplicate Alert");
+      await silent;
+    });
+
     it("a rejected stale move or a no-op move is not broadcast", async () => {
       const lead = await mk(a, "Anna");
       await move(tokenFor(a), lead.id, { stage: "contacted", version: 0 });
