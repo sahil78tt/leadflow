@@ -20,6 +20,8 @@ const schema = z.object({
   UPSTASH_REDIS_URL: optional,
   RESEND_API_KEY: optional,
   EMAIL_FROM: optional,
+
+  WEBHOOK_SECRET: optional,
 });
 
 export const env = schema.parse(process.env);

@@ -5,9 +5,12 @@ import { Brokerage } from "../models/Brokerage.js";
 import { Lead, STAGES, type ILead } from "../models/Lead.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { publishLeadChange } from "../lib/leadEvents.js"; // <-- SWAP 1: was emitLeadChanged from socket.js
+import { emitLeadDuplicate } from "../lib/socket.js";
+import { tenantStorage } from "../lib/tenantContext.js";
 import { normalizeEmail, normalizePhone } from "../lib/normalize.js";
 import { convertLead } from "../lib/convertLead.js";
 import { sendWelcomeEmail } from "../lib/welcomeEmail.js";
+import { env } from "../config/env.js";
 
 const router = Router();
 
@@ -188,8 +191,19 @@ const isDuplicateKeyError = (err: unknown) =>
 // Public endpoint: the tenant comes from the URL, there is no JWT and no tenant context.
 router.post("/webhook/:brokerageId", async (req, res) => {
   const { brokerageId } = req.params;
+
   if (!OBJECT_ID.test(brokerageId))
     return res.status(404).json({ error: "Not found" });
+
+  // Optional shared-secret protection.
+  // Local development continues to work when WEBHOOK_SECRET is not configured.
+  if (env.WEBHOOK_SECRET) {
+    const providedSecret = req.header("X-Webhook-Secret");
+
+    if (providedSecret !== env.WEBHOOK_SECRET) {
+      return res.status(401).json({ error: "Invalid webhook secret" });
+    }
+  }
 
   const body = webhookSchema.parse(req.body);
   const idempotencyKey = idempotencyKeySchema.parse(
@@ -200,6 +214,8 @@ router.post("/webhook/:brokerageId", async (req, res) => {
     return res.status(404).json({ error: "Not found" });
 
   let created: HydratedDocument<ILead> | undefined;
+  let duplicate: HydratedDocument<ILead> | null = null;
+
   try {
     created = await Lead.create({
       ...body,
@@ -207,17 +223,42 @@ router.post("/webhook/:brokerageId", async (req, res) => {
       idempotencyKey,
     });
   } catch (err) {
-    // Any unique-index hit (same email, same phone, or same idempotency key) means we already have this lead.
+    // Any unique-index hit (same email, same phone, or same idempotency key)
+    // means we already have this lead.
     if (!isDuplicateKeyError(err)) throw err;
+
+    // The public webhook has no authenticated tenant context.
+    // Establish the brokerage explicitly for this lookup so the tenant plugin
+    // cannot accidentally read another brokerage's leads.
+    duplicate = await tenantStorage.run(
+      { brokerageId, role: "webhook" },
+      async () => {
+        const match: Record<string, unknown>[] = [];
+
+        if (body.email) match.push({ email: body.email });
+        if (body.phone) match.push({ phone: body.phone });
+        if (idempotencyKey) match.push({ idempotencyKey });
+
+        if (match.length === 0) return null;
+
+        return Lead.findOne({ $or: match });
+      },
+    );
   }
 
-  // Only a genuinely new lead is broadcast, and only to its own brokerage.
   if (created) {
     await publishLeadChange(brokerageId, publicLead(created));
-    void sendWelcomeEmail(welcomeTarget(created)); // a new lead starts in New; not awaited
+
+    // A new lead starts in New; not awaited so email failures do not break ingestion.
+    void sendWelcomeEmail(welcomeTarget(created));
+  } else if (duplicate) {
+    // Notify only staff belonging to this brokerage.
+    // The external caller still receives the same neutral response.
+    emitLeadDuplicate(brokerageId, publicLead(duplicate));
   }
 
-  // Identical response for "created" and "duplicate": the caller must not learn whether a lead already exists.
+  // Identical response for created and duplicate.
+  // The external caller must not learn whether a lead already exists.
   res.status(202).json({ received: true });
 });
 

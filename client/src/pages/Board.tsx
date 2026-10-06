@@ -75,6 +75,10 @@ export default function Board() {
       });
     });
 
+    socket.on("lead:duplicate", ({ lead: incoming }: { lead: Lead }) => {
+      setNotice(`"${incoming.name}" is already in your brokerage's pipeline.`);
+    });
+
     return () => {
       socket.disconnect();
     };
