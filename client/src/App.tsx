@@ -6,6 +6,7 @@ import Login from "@/pages/Login";
 import Home from "@/pages/Home";
 import Dashboard from "@/pages/Dashboard";
 import ClientDetail from "@/pages/ClientDetail";
+import PlatformAdmin from "@/pages/PlatformAdmin";
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/clients/:clientId" element={<ClientDetail />} />
+              <Route path="/platform-admin" element={<PlatformAdmin />} />
             </Route>
           </Route>
         </Routes>

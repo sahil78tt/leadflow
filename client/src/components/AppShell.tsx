@@ -26,7 +26,11 @@ export default function AppShell() {
         <div className="space-y-6">
           <div className="type-heading-md px-2">LeadFlow</div>
           <nav className="space-y-1">
-            {user?.role === "client" ? (
+            {user?.role === "platform_admin" ? (
+              <NavLink to="/platform-admin" className={navClass}>
+                Platform admin
+              </NavLink>
+            ) : user?.role === "client" ? (
               <NavLink to="/" end className={navClass}>
                 My case
               </NavLink>
